@@ -559,19 +559,22 @@ function zahlenHtml() {
     return '<div class="abschnitt-titel">' + titel + '</div>' + l.map(function (x) { return balken(x[0], x[1], max, x[1], '', false, x[0] + ': ' + x[1] + ' Personen', true); }).join('');
   };
   h += verteilung('Nach Kurs', j.kurse) + verteilung('Nach Tarif', j.tarife);
+  if (z.schnitt.length) h += '<div class="abschnitt-titel">Ø-Beitrag je Schüler</div><div class="kpis">' + z.schnitt.map(function (s) {
+    return kpi(s.kurs === 'Alle' ? 'Alle Kurse' : s.kurs, euro(s.beitrag) + ' / Quartal', '≈ ' + euro(s.beitrag / 3) + ' im Monat · aus ' + s.personen + ' Schüler-Quartalen', 'zahl');
+  }).join('') + '</div><p class="zahl-hinweis">Nur Schüler, die ein ganzes Quartal (' + esc(z.referenz) + ') im selben Kurs waren – Rabatte, Paare und Tarifmix sind drin.</p>';
   var teile = function (q, f) { return q.kurse.filter(function (k) { return f(k) !== null; }).map(function (k) { return k.kurs + ' ' + f(k); }).join(' · '); };
   var komma = function (n) { return String(n).replace('.', ','); };
   var maxS = Math.max.apply(null, qs.map(function (q) { return q.schueler; }).concat([1]));
   h += '<div class="abschnitt-titel">Schüler je Quartal</div>' + qs.slice().reverse().map(function (q) {
     return balken(q.q, q.schueler, maxS, komma(Math.round(q.schueler * 10) / 10), [teile(q, function (k) { return k.schueler === null ? null : komma(k.schueler); }), '+' + q.zugang + ' neu · −' + q.abgang + ' gekündigt'].filter(Boolean).join(' · '), q.laufend);
   }).join('') + '<p class="zahl-hinweis">Aus dem Umsatz gerechnet: Umsatz des Kurses ÷ Ø-Beitrag je Schüler und Quartal' +
-    (z.schnitt.length ? ' (' + z.schnitt.map(function (s) { return s.kurs + ' ' + euro(s.beitrag); }).join(', ') + '; Kunden mit vollem Quartal ' + esc(z.referenz) + '; Kurs ohne eigenen Wert: Ø aller Kurse)' : '') +
+    (z.schnitt.length ? ' (siehe oben; Kurs ohne eigenen Wert: Ø aller Kurse)' : '') +
     '. Wer mitten im Quartal kommt, zählt anteilig. Neu/gekündigt = Personen, deren Vertrag im Quartal beginnt bzw. endet.</p>';
   var maxU = Math.max.apply(null, qs.map(function (q) { return q.soll; }).concat([1]));
   h += '<div class="abschnitt-titel">Umsatz je Quartal</div>' + qs.slice().reverse().map(function (q) {
     return balken(q.q, q.soll, maxU, euro(q.soll), [teile(q, function (k) { return euro(k.umsatz); }), 'bezahlt ' + euro(q.bezahlt), q.offen ? 'offen ' + euro(q.offen) : ''].filter(Boolean).join(' · '), q.laufend,
       q.q + ': berechnet ' + euro(q.soll) + ', bezahlt ' + euro(q.bezahlt) + ', offen ' + euro(q.offen));
-  }).join('') + '<p class="zahl-hinweis">Berechnet = Soll der Forderung ohne stornierte Zeilen. Gestreift = laufendes Quartal.</p>';
+  }).join('') + '<p class="zahl-hinweis">Berechnet = Soll der Forderung ohne stornierte Zeilen, ohne Einmalaufträge und Gutscheine. Gestreift = laufendes Quartal.</p>';
   var mitS = qs;
   var maxL = Math.max.apply(null, mitS.map(function (q) { return q.leads; }).concat([1]));
   h += '<div class="abschnitt-titel">Interessenten je Quartal</div>' + mitS.slice().reverse().map(function (q) {
