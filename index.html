@@ -329,7 +329,7 @@ window.COCKPIT_KONFIG = {"api":"https://script.google.com/macros/s/AKfycbzGYwx23
 var D = null, BEF = {}, AKTEN = { kunde: null, lead: null }, MAILS = {}, ERLEDIGT = {};   // je Ansicht eine eigene Akte
 var GEMERKT = {}, GELADEN = 0;   // geladene Akten bis zum nächsten Neuladen; Zeitpunkt des letzten ladeStart
 var START = window.COCKPIT_START || '';   // Direktlink ?v=… (gesetzt von werkzeuge/web.js bzw. Vorschau)
-var Z = { ansicht: 'heute', filter: 'ALLE', kunde: '', lead: '', detail: null, von: null, frage: null, warnungen: null, pdf: false };
+var Z = { ansicht: 'heute', filter: 'ALLE', zahlenTeil: 'ueberblick', kunde: '', lead: '', detail: null, von: null, frage: null, warnungen: null, pdf: false };
 var ich = null;
 try { ich = localStorage.getItem('cockpit-ich'); } catch (e) {}
 
@@ -353,7 +353,7 @@ function neuLaden(danach, frisch) {
   var t0 = Date.now();
   $('#stand').classList.add('laedt');
   rufe('ladeStart', [!!frisch], function (d) {
-    D = d; BEF = {}; GEMERKT = {}; GELADEN = Date.now(); d.befehle.forEach(function (b) { BEF[b.id] = b; });
+    D = d; BEF = {}; GEMERKT = {}; GELADEN = Date.now(); B_GRUPPEN = d.briefingGruppen || []; d.befehle.forEach(function (b) { BEF[b.id] = b; });
     d.ladezeit.dauer = Date.now() - t0;
     $('#stand').classList.remove('laedt');
     $('#stand').textContent = 'Stand ' + d.stand + ' ↻';
@@ -418,17 +418,23 @@ function knoepfe(ids, key, gesperrt) {
 }
 
 // ---------- Heute ----------
+var B_GRUPPEN = [];   // Briefing-Gruppen, kommen mit ladeStart (BRIEFING_GRUPPEN in Daten.js)
 var TYPNAME = { RECHNUNG: 'Rechnung', PROBESTUNDE: 'Probestunde', INTERESSENT: 'Interessent', MAIL: 'Mail-Eingang', GUTSCHEIN: 'Gutschein' };
 function heuteHtml() {
   var std = new Date().getHours(), gruss = std < 11 ? 'Guten Morgen' : std < 18 ? 'Hallo' : 'Guten Abend';
   var h = '<p class="gruss">' + gruss + (ich ? ', <b>' + esc(ich) + '</b>' : '') + '. ' + (D.vorgaenge.length ? D.vorgaenge.length + ' Vorgänge warten auf eine Entscheidung.' : 'Alles entschieden.') + '</p>';
   if (!ich) h += '<div class="werfrage"><p>Wer nutzt dieses Handy? Der Name geht mit jedem Befehl mit und steht in der Telegram-Bestätigung.</p><div class="zwei"><button class="btn" type="button" data-ich="Christina">Christina</button><button class="btn" type="button" data-ich="Thanh">Thanh</button></div></div>';
   var b = D.briefing;
-  if (b.anzahl) {
+  if (b.anzahl || b.kundenAnzahl) {
+    var gruppen = B_GRUPPEN.filter(function (g) { return b.kunden[g.id].length; }).map(function (g) { return g.zeichen + ' ' + b.kunden[g.id].length; }).join('  ');
     h += '<button type="button" class="briefing-karte" data-briefing><span class="typ">Briefing · ' + esc(b.wochentag) + ' ' + esc(b.tag) + '</span>' +
-      '<span class="b-titel">' + b.anzahl + ' Probestündler · ' + b.slots.map(function (s) { return s.von + ' ' + s.kurs + ' (' + s.personen.length + ')'; }).join(' · ') + '</span>' +
-      '<span class="sub">' + (b.offen ? b.offen + ' Rückmeldungen offen' : 'alle zurückgemeldet') + (b.uebung ? ' · Übungszeit ' + esc(b.uebung) : '') + '</span></button>';
+      '<span class="b-titel">' + (b.anzahl ? b.anzahl + ' Probestündler · ' + b.slots.map(function (s) { return s.von + ' ' + s.kurs + ' (' + s.personen.length + ')'; }).join(' · ') : 'Keine Probestunden') + '</span>' +
+      '<span class="sub">' + [b.anzahl ? (b.offen ? b.offen + ' Rückmeldungen offen' : 'alle zurückgemeldet') : '', gruppen, b.uebung ? 'Übungszeit ' + esc(b.uebung) : ''].filter(Boolean).join(' · ') + '</span></button>';
   }
+  var probleme = D.laeufe.filter(function (l) { return l.zustand === 'fehler' || l.zustand === 'ueberfaellig'; });
+  if (probleme.length) h += '<button type="button" class="karte" data-ansicht="infos"><div class="karte-kopf"><span class="typ">Läufe</span></div><h3>' +
+    probleme.length + (probleme.length === 1 ? ' Lauf braucht' : ' Läufe brauchen') + ' Aufmerksamkeit</h3><div class="sub">' + esc(probleme.map(function (l) { return l.lauf; }).join(', ')) +
+    '</div><div class="karte-fuss"><span class="pill err" style="margin-left:auto">prüfen</span></div></button>';
   var n = { ALLE: D.vorgaenge.length };
   D.vorgaenge.forEach(function (v) { n[v.typ] = (n[v.typ] || 0) + 1; });
   h += '<div class="filter" role="group" aria-label="Filter">' + ['ALLE'].concat(Object.keys(TYPNAME)).filter(function (t) { return n[t]; }).map(function (t) {
@@ -450,8 +456,15 @@ function heuteHtml() {
 function briefingHtml() {
   var b = D.briefing;
   var h = '<button type="button" class="zurueck" data-zurueck>← Heute</button><div class="akte-kopf"><span class="typ">Briefing</span><h2 class="d-titel">' + esc(b.wochentag) + ', ' + esc(b.tag) + '</h2>' +
-    '<span class="sub">Wer zur Probestunde kommt – mit allem, was du vor dem Gespräch wissen willst.</span></div>';
-  if (!b.anzahl) return h + '<div class="leer"><div class="gross">Frei</div>Keine Probestunden an diesem Tag.</div>';
+    '<span class="sub">Wer heute kommt – Neue, Rückkehrer, Abschiede, Geburtstage und die Probestunden.</span></div>';
+  if (!b.anzahl && !b.kundenAnzahl) return h + '<div class="leer"><div class="gross">Frei</div>Keine Probestunden, nichts Besonderes an diesem Tag.</div>';
+  h += B_GRUPPEN.filter(function (g) { return b.kunden[g.id].length; }).map(function (g) {
+    return '<div class="abschnitt-titel">' + g.zeichen + ' ' + esc(g.titel) + ' · ' + esc(g.text) + '</div>' + b.kunden[g.id].map(function (p) {
+      return '<section class="person-karte fertig"><div class="zeile-kopf"><button type="button" class="p-name" data-kunde="' + esc(p.schluessel) + '">' + esc(p.name) + ' ›</button>' +
+        '<span class="pill neutral">' + esc(p.kurs) + '</span></div>' + (p.hinweis ? '<div class="p-fakten"><span>' + esc(p.hinweis) + '</span></div>' : '') + '</section>';
+    }).join('');
+  }).join('');
+  if (b.anzahl) h += '<div class="abschnitt-titel" style="margin-top:26px">Probestunden</div>';
   h += b.slots.map(function (s) {
     return '<div class="abschnitt-titel">' + esc(s.kurs) + ' · ' + esc(s.von) + (s.bis ? '–' + esc(s.bis) : '') + ' Uhr</div>' + s.personen.map(function (p) {
       return '<section class="person-karte' + (p.offen ? '' : ' fertig') + '"><div class="zeile-kopf"><button type="button" class="p-name" data-lead="' + esc(p.nr) + '">' + esc(p.name) + ' ›</button>' +
@@ -549,7 +562,14 @@ function balken(l, wert, max, text, sub, laufend, titel, breit) {
   return '<div class="balken' + (laufend ? ' laufend' : '') + (breit ? ' breit' : '') + '" title="' + esc(titel || '') + '"><span class="l">' + esc(l) + '</span><span class="spur"><i style="width:' +
     (max > 0 ? Math.max(0, Math.round(100 * wert / max)) : 0) + '%"></i></span><span class="v">' + esc(text) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</div>';
 }
+var ZAHLEN_TEILE = { ueberblick: 'Überblick', geld: 'Geld', kanaele: 'Kanäle' };
 function zahlenHtml() {
+  var h = '<div class="filter" role="group" aria-label="Bereich">' + Object.keys(ZAHLEN_TEILE).map(function (t) {
+    return '<button type="button" class="chip" data-zahlen="' + t + '" aria-pressed="' + (Z.zahlenTeil === t) + '">' + ZAHLEN_TEILE[t] + '</button>';
+  }).join('') + '</div>';
+  return h + (Z.zahlenTeil === 'geld' ? geldHtml() : Z.zahlenTeil === 'kanaele' ? kanaeleHtml() : ueberblickHtml());
+}
+function ueberblickHtml() {
   var z = D.zahlen, j = z.jetzt, qs = z.quartale;
   var h = '<p class="gruss">Schüler zählen als Personen (Paar = 2), der Stand kommt aus dem Reiter Vertrag. Umsatz aus der Forderung.</p>';
   h += '<div class="kpis">' + kpi('Schüler aktiv', j.schueler, j.vertraege + ' Verträge') + kpi('Startet bald', j.neu, 'Kursstart in ' + j.vorlauf + ' Tagen') +
@@ -588,17 +608,69 @@ function infosHtml() {
   var l = D.ladezeit, s = function (ms) { return (ms / 1000).toFixed(1).replace('.', ',') + ' s'; };
   var h = '<div class="vorgang ruhig" style="margin-top:16px"><span class="typ">Ladezeit</span><span class="sub">Letztes Laden ' + s(l.dauer) + ', davon Daten ' + s(l.ms) + ' aus ' +
     (l.quelle === 'Cache' ? 'dem Zwischenspeicher' : 'den Sheets') + '. Der Server merkt sich die Sheets ' + l.cacheMinuten + ' Minuten; „Stand“ oben antippen lädt neu aus den Sheets.</span></div>';
-  h += tauchen('Läufe', D.laeufe.length, laeufeHtml(), false);
+  var probleme = D.laeufe.filter(function (l) { return l.zustand === 'fehler' || l.zustand === 'ueberfaellig'; }).length;
+  h += tauchen('Läufe' + (probleme ? ' · ' + probleme + ' mit Problem' : ''), D.laeufe.length, laeufeHtml(), true);
   h += tauchen('Befehle', D.befehle.length, befehleHtml(), false);
   return h;
 }
+var LAUF_PILL = { ok: ['ok', 'OK'], fehler: ['err', 'Fehler'], ueberfaellig: ['warn', 'überfällig'], offen: ['neutral', 'noch nicht gemeldet'], eingang: ['neutral', 'Eingang'], ohne: null };
 function laeufeHtml() {
-  var h = '<p class="gruss" style="margin-top:0">Alle automatischen Abläufe. Ein Lauf-Protokoll (letzter Lauf, Ergebnis) folgt in einer späteren Stufe.</p>';
+  var h = '<p class="gruss" style="margin-top:0">Zeitgesteuerte Läufe melden sich nach jedem Lauf (Reiter „Läufe“ im Kundenbestand). Überfällig = länger als erwartet kein Lauf.</p>';
   ['Zeitgesteuert', 'Bei Änderung', 'Bei Eingang'].forEach(function (g) {
     h += '<div class="abschnitt-titel">' + g + '</div>' + D.laeufe.filter(function (l) { return l.gruppe === g; }).map(function (l) {
-      return '<div class="zeile"><span class="was">' + esc(l.lauf) + '</span><span class="wann">' + esc(l.takt) + '</span><span class="ergebnis"><span class="code">' + esc(l.projekt) + '</span></span></div>';
+      var p = LAUF_PILL[l.zustand];
+      return '<div class="zeile"><span class="was">' + esc(l.lauf) + '</span><span class="wann">' + (p ? '<span class="pill ' + p[0] + '">' + p[1] + '</span>' : '') + '</span>' +
+        '<span class="ergebnis">' + esc(l.takt) + (l.letzter ? ' · zuletzt ' + esc(l.letzter) : '') + (l.dauer ? ' · ' + esc(l.dauer.replace('.', ',')) + ' s' : '') +
+        (l.meldung ? '<br>' + esc(l.meldung) : '') + (l.fehler ? '<br><span style="color:var(--err)">Letzter Fehler ' + esc(l.fehler) + '</span>' : '') +
+        '<br><span class="code">' + esc(l.projekt) + '</span></span></div>';
     }).join('');
   });
+  return h;
+}
+
+// ---------- Zahlen: Geld ----------
+function geldHtml() {
+  var g = D.geld, n = g.naechste;
+  var h = '<div class="kpis">' + kpi('Offen gesamt', euro(g.offenGesamt), 'Forderung ausstehend', 'zahl') +
+    kpi('Überfällig', euro(g.monate[0].lastschrift + g.monate[0].ueberweisung), g.ueberfaellig.length + ' Kunden', 'zahl' + (g.ueberfaellig.length ? ' offen' : '')) + '</div>';
+  h += '<div class="abschnitt-titel">Nächste Lastschrift</div>';
+  h += !n ? '<p class="sub">Keine offenen Lastschrift-Posten.</p>' :
+    '<div class="vorgang ruhig"><span class="typ">' + esc(n.termin) + ' · in ' + n.tage + ' Tagen</span><b>' + euro(n.summe) + ' · ' + n.anzahl + ' Posten</b>' +
+    (n.ohneMandat.length ? '<span class="sub" style="color:var(--err)">Ohne Mandatsdatum (fliegt aus dem Lauf): ' + n.ohneMandat.map(function (k) {
+      return '<button type="button" class="p-name" data-kunde="' + esc(k) + '">' + esc(k) + '</button>'; }).join(', ') + '</span>' : '<span class="sub">alle Mandate vorhanden</span>') + '</div>';
+  var max = Math.max.apply(null, g.monate.map(function (m) { return m.lastschrift + m.ueberweisung; }).concat([1]));
+  h += '<div class="abschnitt-titel">Erwartete Eingänge</div>' + g.monate.map(function (m) {
+    return balken(m.titel, m.lastschrift + m.ueberweisung, max, euro(m.lastschrift + m.ueberweisung), 'Lastschrift ' + euro(m.lastschrift) + ' · Überweisung ' + euro(m.ueberweisung), false, '', true);
+  }).join('') + '<p class="zahl-hinweis">Nach Fälligkeit der offenen Forderungen.</p>';
+  if (g.ueberfaellig.length) h += tauchen('Überfällig je Kunde', g.ueberfaellig.length, g.ueberfaellig.map(function (u) {
+    return '<div class="reihe"><span><button type="button" class="p-name" data-kunde="' + esc(u.kunde) + '">' + esc(u.kunde) + ' ›</button><div class="r-sub">seit ' + u.tage + ' Tagen</div></span><span class="r-rechts">' + euro(u.betrag) + '</span></div>';
+  }).join(''), g.ueberfaellig.length <= 5);
+  var r = g.rueck;
+  h += '<div class="abschnitt-titel">Rücklastschriften · 12 Monate</div><div class="kpis">' + kpi('Anzahl', r.anzahl, r.quote === null ? '' : r.quote.toString().replace('.', ',') + ' % der Einzüge') +
+    kpi('Summe', euro(r.summe), '', 'zahl') + '</div>' + r.letzte.map(function (x) {
+      return '<div class="reihe"><span>' + esc(x.name) + '<div class="r-sub">' + esc(x.datum) + (x.zuordnung ? ' · ' + esc(x.zuordnung) : '') + '</div></span><span class="r-rechts">' + euro(x.betrag) + '</span></div>';
+    }).join('');
+  var gs = g.gutscheine;
+  h += '<div class="abschnitt-titel">Gutscheine</div><div class="kpis">' + kpi('Noch einzulösen', euro(gs.summe), gs.anzahl + ' Gutscheine' + (gs.unbezahlt ? ' · ' + gs.unbezahlt + ' unbezahlt' : ''), 'zahl') +
+    kpi('Laufen bald ab', gs.bald.length, 'in 90 Tagen') + '</div>' + gs.bald.map(function (x) {
+      return '<div class="reihe"><span>' + esc(x.nr) + '<div class="r-sub">gültig bis ' + esc(x.bis) + '</div></span><span class="r-rechts">' + euro(x.rest) + '</span></div>';
+    }).join('') + '<p class="zahl-hinweis">Noch einzulösen = Restwert aktiver Gutscheine: Geld ist (meist) da, die Stunden stehen noch aus.</p>';
+  return h;
+}
+
+// ---------- Zahlen: Kanäle ----------
+function kanaeleHtml() {
+  var k = D.kanaele, s = k.summe;
+  var pz = function (a, b) { return b ? Math.round(100 * a / b) + ' %' : '–'; };
+  var h = '<p class="gruss">Interessenten der letzten 12 Monate nach Kanal: Kontakt → Probestunde → erschienen → Kunde.</p>';
+  h += '<div class="kpis">' + kpi('Kontakte', s.kontakte, 'davon ' + s.kunden + ' Kunde (' + pz(s.kunden, s.kontakte) + ')') +
+    kpi('Probestunde → Kunde', pz(s.kunden, s.probestunde), s.nichtErschienen + ' nicht erschienen') + '</div>';
+  var max = Math.max.apply(null, k.kanaele.map(function (x) { return x.kontakte; }).concat([1]));
+  h += '<div class="abschnitt-titel">Je Kanal</div>' + k.kanaele.map(function (x) {
+    return balken(x.kanal, x.kontakte, max, x.kunden + ' / ' + x.kontakte,
+      x.probestunde + ' Probestunde · ' + x.erschienen + ' erschienen · ' + x.kunden + ' Kunde (' + pz(x.kunden, x.kontakte) + ')' + (x.nichtErschienen ? ' · ' + x.nichtErschienen + ' nicht erschienen' : ''), false,
+      x.kanal + ': ' + x.kontakte + ' Kontakte, ' + x.kunden + ' Kunden', true);
+  }).join('') + '<p class="zahl-hinweis">Balken = Kontakte, Zahl rechts = Kunden / Kontakte. Grundlage ist der heutige Status: wer nach der Probestunde abgebrochen hat, zählt nur als Kontakt.</p>';
   return h;
 }
 function befehleHtml() {
@@ -632,6 +704,7 @@ document.addEventListener('click', function (e) {
   if (t.id === 'wer-knopf') { ich = ich === 'Christina' ? 'Thanh' : 'Christina'; try { localStorage.setItem('cockpit-ich', ich); } catch (x) {} return rendere(); }
   if (t.dataset.ansicht) { Z.ansicht = t.dataset.ansicht; Z.detail = null; Z.von = null; Z.frage = null; Z.warnungen = null; window.scrollTo(0, 0); return rendere(); }
   if (t.dataset.filter) { Z.filter = t.dataset.filter; return rendere(); }
+  if (t.dataset.zahlen) { Z.zahlenTeil = t.dataset.zahlen; return rendere(); }
   if (t.hasAttribute('data-briefing')) { Z.detail = 'BRIEFING'; window.scrollTo(0, 0); return rendere(); }
   if (t.dataset.oeffne) return oeffneVorgang(t.dataset.oeffne);
   if (t.dataset.kunde) { Z.ansicht = 'kunden'; Z.kunde = t.dataset.kunde; Z.detail = null; Z.von = null; return ladeAkte('kunde', t.dataset.kunde); }
