@@ -59,6 +59,8 @@ button { cursor: pointer; }
 .wer { white-space: nowrap; flex: none; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px 4px 4px; background: var(--paper); font-size: .92rem; }
 .wer .punkt { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .8rem; }
 
+button.prototyp { cursor: pointer; line-height: inherit; }
+button.prototyp.laedt { opacity: .6; }
 .gruss { margin: 16px 0 0; color: var(--muted); }
 .gruss b { color: var(--ink); font-weight: 600; }
 .werfrage { margin-top: 14px; background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; }
@@ -199,6 +201,17 @@ details.tauchen > summary .zahl { font-weight: 400; font-size: .8rem; color: var
 .zeile .ergebnis { color: var(--muted); font-size: .88rem; grid-column: 1 / -1; }
 .zeile .wann { font-size: .78rem; color: var(--stone); text-align: right; }
 .punkt-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+/* Zahlen: Balkenliste, eine Reihe (Orange), Werte als Text daneben */
+.balken { display: grid; grid-template-columns: 3.4rem 1fr auto; align-items: center; gap: 4px 10px; padding: 7px 0; font-size: .9rem; }
+.balken.breit { grid-template-columns: 8.5rem 1fr auto; }
+.balken.breit .l { font-family: var(--f-body); font-size: .86rem; color: var(--ink); }
+.balken .l { font-family: var(--f-mono); font-size: .78rem; color: var(--muted); }
+.balken .spur { height: 10px; background: var(--sand); border-radius: 0 4px 4px 0; overflow: hidden; }
+.balken .spur i { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+.balken.laufend .spur i { background: repeating-linear-gradient(135deg, var(--accent) 0 6px, #E39A3B 6px 9px); }
+.balken .v { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.balken .s { grid-column: 2 / -1; font-size: .78rem; color: var(--muted); margin-top: -2px; }
+.zahl-hinweis { font-size: .8rem; color: var(--muted); margin: 6px 0 0; }
 .abschnitt-titel { font-family: var(--f-head); font-weight: 400; font-size: .78rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 22px 0 2px; }
 .lauf-tg { margin-top: 6px; grid-column: 1 / -1; }
 
@@ -269,7 +282,7 @@ details.tauchen > summary .zahl { font-weight: 400; font-size: .8rem; color: var
     <header class="kopf wrap">
       <div class="kopf-zeile">
         <div>
-          <div class="ober">Tanzschule Bachata Viersen<span class="prototyp" id="stand">lädt …</span></div>
+          <div class="ober">Tanzschule Bachata Viersen<button type="button" class="prototyp" id="stand" title="Antippen: neu aus den Sheets laden">lädt …</button></div>
           <h1 class="marke">Cockpit</h1>
         </div>
         <button class="wer" id="wer-knopf" type="button" aria-label="Wer nutzt dieses Handy? Wechseln">
@@ -285,8 +298,8 @@ details.tauchen > summary .zahl { font-weight: 400; font-size: .8rem; color: var
       <button type="button" data-ansicht="heute"><span class="z">Heute<span class="badge" id="badge-heute">·</span></span>Entscheiden</button>
       <button type="button" data-ansicht="kunden"><span class="z">Kunden</span>Bestand</button>
       <button type="button" data-ansicht="leads"><span class="z">Leads</span>Interessenten</button>
-      <button type="button" data-ansicht="laeufe"><span class="z">Läufe</span>Automatik</button>
-      <button type="button" data-ansicht="befehle"><span class="z">Befehle</span>Wer macht was</button>
+      <button type="button" data-ansicht="zahlen"><span class="z">Zahlen</span>Kennzahlen</button>
+      <button type="button" data-ansicht="infos"><span class="z">Infos</span>Läufe · Befehle</button>
     </div>
   </nav>
   <div class="anmeldung" id="anmeldung" hidden>
@@ -314,6 +327,7 @@ window.COCKPIT_KONFIG = {"api":"https://script.google.com/macros/s/AKfycbzGYwx23
 // Welche Knöpfe ein Vorgang hat, steht im Vorgang (befehle: [...]); Beschriftung/Stil aus der Befehlstabelle.
 // ============================================================
 var D = null, BEF = {}, AKTEN = { kunde: null, lead: null }, MAILS = {}, ERLEDIGT = {};   // je Ansicht eine eigene Akte
+var GEMERKT = {}, GELADEN = 0;   // geladene Akten bis zum nächsten Neuladen; Zeitpunkt des letzten ladeStart
 var START = window.COCKPIT_START || '';   // Direktlink ?v=… (gesetzt von werkzeuge/web.js bzw. Vorschau)
 var Z = { ansicht: 'heute', filter: 'ALLE', kunde: '', lead: '', detail: null, von: null, frage: null, warnungen: null, pdf: false };
 var ich = null;
@@ -334,18 +348,25 @@ function rufe(fn, args, fertig) {
     setTimeout(function () { try { fertig(JSON.parse(window.VORSCHAU[fn].apply(null, args))); } catch (e) { fehler(e); } }, 250);
   } else fehler('Kein Server erreichbar.');
 }
-function neuLaden(danach) {
-  rufe('ladeStart', [], function (d) {
-    D = d; BEF = {}; d.befehle.forEach(function (b) { BEF[b.id] = b; });
-    $('#stand').textContent = 'Stand ' + d.stand;
+// frisch = an den Sheets vorbei (sonst darf der Server bis zu 10 Minuten aus seinem Cache antworten)
+function neuLaden(danach, frisch) {
+  var t0 = Date.now();
+  $('#stand').classList.add('laedt');
+  rufe('ladeStart', [!!frisch], function (d) {
+    D = d; BEF = {}; GEMERKT = {}; GELADEN = Date.now(); d.befehle.forEach(function (b) { BEF[b.id] = b; });
+    d.ladezeit.dauer = Date.now() - t0;
+    $('#stand').classList.remove('laedt');
+    $('#stand').textContent = 'Stand ' + d.stand + ' ↻';
     if (Z.ansicht === 'kunden' && Z.kunde) return ladeAkte('kunde', Z.kunde, danach);
     if (Z.ansicht === 'leads' && Z.lead) return ladeAkte('lead', Z.lead, danach);
     rendere(); if (danach) danach();
   });
 }
 function ladeAkte(art, key, danach) {
+  var merk = art + '|' + key;
+  if (GEMERKT[merk]) { AKTEN[art] = GEMERKT[merk]; rendere(); if (danach) danach(); return; }
   AKTEN[art] = null; rendere();
-  rufe(art === 'kunde' ? 'ladeKunde' : 'ladeLead', [key], function (a) { AKTEN[art] = a; rendere(); if (danach) danach(); });
+  rufe(art === 'kunde' ? 'ladeKunde' : 'ladeLead', [key], function (a) { GEMERKT[merk] = a; AKTEN[art] = a; rendere(); if (danach) danach(); });
 }
 
 // ---------- Rahmen ----------
@@ -357,7 +378,7 @@ function rendere() {
   document.querySelectorAll('.dock button').forEach(function (b) {
     if (b.dataset.ansicht === Z.ansicht && !Z.detail) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
-  var h = Z.detail ? detailHtml() : { heute: heuteHtml, kunden: kundeHtml, leads: leadHtml, laeufe: laeufeHtml, befehle: befehleHtml }[Z.ansicht]();
+  var h = Z.detail ? detailHtml() : { heute: heuteHtml, kunden: kundeHtml, leads: leadHtml, zahlen: zahlenHtml, infos: infosHtml }[Z.ansicht]();
   $('#inhalt').innerHTML = '<div class="ansicht">' + h + '</div>';
 }
 function toast(text, kopf) {
@@ -446,20 +467,22 @@ function briefingHtml() {
 
 // ---------- Kundenakte ----------
 function kundeHtml() {
-  var akt = D.kunden.filter(function (k) { return k.aktiv; }), inakt = D.kunden.filter(function (k) { return !k.aktiv; });
-  var opt = function (k) { return '<option value="' + esc(k.schluessel) + '"' + (k.schluessel === Z.kunde ? ' selected' : '') + '>' + esc(k.schluessel) + ' · ' + esc(k.nr) + (k.offen ? '  ● offen' : '') + '</option>'; };
+  // Gruppen nach Vertragsstand: aktiv inkl. „startet bald“ (Kursstart in den nächsten 14 Tagen), pausiert, beendet
+  var gruppe = function (st) { return D.kunden.filter(function (k) { return st.indexOf(k.stand) >= 0; }); };
+  var opt = function (k) { return '<option value="' + esc(k.schluessel) + '"' + (k.schluessel === Z.kunde ? ' selected' : '') + '>' + esc(k.schluessel) + ' · ' + esc(k.nr) + (k.hinweis ? ' · ' + esc(k.hinweis) : '') + (k.offen ? '  ● offen' : '') + '</option>'; };
+  var og = function (titel, l) { return l.length ? '<optgroup label="' + titel + ' (' + l.length + ')">' + l.map(opt).join('') + '</optgroup>' : ''; };
   var h = (Z.von ? '<button type="button" class="zurueck" data-zurueck>← Heute</button>' : '') +
     '<div class="wahl"><label for="kunde-wahl">Kunde wählen</label><select id="kunde-wahl"><option value="">– bitte wählen –</option>' +
-    '<optgroup label="Aktiv (' + akt.length + ')">' + akt.map(opt).join('') + '</optgroup><optgroup label="Beendet (' + inakt.length + ')">' + inakt.map(opt).join('') + '</optgroup></select></div>';
+    og('Aktiv', gruppe(['aktiv', 'neu'])) + og('Pausiert', gruppe(['pausiert'])) + og('Beendet', gruppe(['beendet'])) + '</select></div>';
   if (!Z.kunde) return h;
   if (!AKTEN.kunde) return h + '<p class="laden">Akte wird geladen …</p>';
   var k = AKTEN.kunde;
   h += '<div class="akte-kopf"><h2 class="d-titel">' + esc(k.name) + '</h2><div class="akte-meta"><span class="schluessel">Kundennr. ' + esc(k.nr) + ' · Mandatsref. ' + esc(k.nr) + (k.paar ? ' · Paar' : '') + '</span>' +
-    '<span class="pill ' + (k.aktiv ? 'ok' : 'neutral') + '">' + (k.aktiv ? 'Aktiv' : 'Beendet') + '</span></div></div>';
+    '<span class="pill ' + ({ aktiv: 'ok', neu: 'akz', pausiert: 'warn' }[k.stand] || 'neutral') + '">' + esc(k.standText) + (k.standHinweis ? ' · ' + esc(k.standHinweis) : '') + '</span></div></div>';
   var mandat = k.mandat === null ? kpi('Lastschrift unterschrieben am', '—', 'zahlt per ' + k.zahlweise) : k.mandat ? kpi('Lastschrift unterschrieben am', k.mandat) : kpi('Lastschrift unterschrieben am', 'fehlt', 'Einzug nicht möglich', 'fehlt');
   h += '<div class="kpis">' + kpi('Kurs', k.kurs, k.vertrag) + kpi('Tarif', k.tarif, k.personen + (k.personen > 1 ? ' Personen' : ' Person')) + kpi('Zahlweise', k.zahlweise) + mandat +
     kpi('Partner/in', k.partner) + kpi('Kunde seit', k.seit, k.dauer) + kpi('Ausstehend', k.offen, '', 'zahl ' + k.offenArt) + kpi('Umsatz beglichen', k.umsatz, '', 'zahl') + '</div>';
-  if (k.profile.length) h += '<div class="profile">Gleiche Kundennummer, weiteres Profil: ' + k.profile.map(function (p) { return '<button type="button" data-kunde="' + esc(p.schluessel) + '">' + esc(p.schluessel) + '</button> (' + (p.aktiv ? 'aktiv' : 'beendet') + ')'; }).join(', ') + '</div>';
+  if (k.profile.length) h += '<div class="profile">Gleiche Kundennummer, weiteres Profil: ' + k.profile.map(function (p) { return '<button type="button" data-kunde="' + esc(p.schluessel) + '">' + esc(p.schluessel) + '</button> (' + esc(p.stand) + ')'; }).join(', ') + '</div>';
   h += k.vorgang ? rechnungVorgangHtml(k.vorgang) : '<div class="vorgang ruhig"><span class="typ">Kein offener Vorgang</span><span class="sub">Pausieren, Kündigen, Paar ↔ einzeln und Storno laufen vorerst weiter über das Sheet-Menü.</span></div>';
   h += tauchen('Stammdaten', '', '<dl class="kv">' + k.stamm.map(function (s) { return '<dt>' + esc(s[0]) + '</dt><dd>' + esc(s[1] || '—') + '</dd>'; }).join('') + '</dl>');
   h += tauchen('Verträge', k.vertraege.length, k.vertraege.map(function (r) { return '<div class="reihe"><span>' + esc(r[0]) + '<div class="r-sub">' + esc(r[1]) + '</div></span><span class="sub">' + esc(r[2]) + '</span></div>'; }).join(''));
@@ -520,9 +543,54 @@ function detailHtml() {
   return h + knoepfe(v.befehle, v.key) + '</section>';
 }
 
-// ---------- Läufe, Befehle ----------
+// ---------- Zahlen ----------
+function euro(n) { return Math.round(n).toLocaleString('de-DE') + ' €'; }
+function balken(l, wert, max, text, sub, laufend, titel, breit) {
+  return '<div class="balken' + (laufend ? ' laufend' : '') + (breit ? ' breit' : '') + '" title="' + esc(titel || '') + '"><span class="l">' + esc(l) + '</span><span class="spur"><i style="width:' +
+    (max > 0 ? Math.max(0, Math.round(100 * wert / max)) : 0) + '%"></i></span><span class="v">' + esc(text) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</div>';
+}
+function zahlenHtml() {
+  var z = D.zahlen, j = z.jetzt, qs = z.quartale;
+  var h = '<p class="gruss">Schüler zählen als Personen (Paar = 2), der Stand kommt aus dem Reiter Vertrag. Umsatz aus der Forderung.</p>';
+  h += '<div class="kpis">' + kpi('Schüler aktiv', j.schueler, j.vertraege + ' Verträge') + kpi('Startet bald', j.neu, 'Kursstart in ' + j.vorlauf + ' Tagen') +
+    kpi('Pausiert', j.pausiert, 'Personen') + kpi('Überfällig', euro(j.ueberfaellig), 'offen nach Fälligkeit', 'zahl' + (j.ueberfaellig > 0 ? ' offen' : '')) + '</div>';
+  var verteilung = function (titel, l) {
+    var max = Math.max.apply(null, l.map(function (x) { return x[1]; }).concat([1]));
+    return '<div class="abschnitt-titel">' + titel + '</div>' + l.map(function (x) { return balken(x[0], x[1], max, x[1], '', false, x[0] + ': ' + x[1] + ' Personen', true); }).join('');
+  };
+  h += verteilung('Nach Kurs', j.kurse) + verteilung('Nach Tarif', j.tarife);
+  var teile = function (q, f) { return q.kurse.filter(function (k) { return f(k) !== null; }).map(function (k) { return k.kurs + ' ' + f(k); }).join(' · '); };
+  var komma = function (n) { return String(n).replace('.', ','); };
+  var maxS = Math.max.apply(null, qs.map(function (q) { return q.schueler; }).concat([1]));
+  h += '<div class="abschnitt-titel">Schüler je Quartal</div>' + qs.slice().reverse().map(function (q) {
+    return balken(q.q, q.schueler, maxS, komma(Math.round(q.schueler * 10) / 10), [teile(q, function (k) { return k.schueler === null ? null : komma(k.schueler); }), '+' + q.zugang + ' neu · −' + q.abgang + ' gekündigt'].filter(Boolean).join(' · '), q.laufend);
+  }).join('') + '<p class="zahl-hinweis">Aus dem Umsatz gerechnet: Umsatz des Kurses ÷ Ø-Beitrag je Schüler und Quartal' +
+    (z.schnitt.length ? ' (' + z.schnitt.map(function (s) { return s.kurs + ' ' + euro(s.beitrag); }).join(', ') + '; Kunden mit vollem Quartal ' + esc(z.referenz) + '; Kurs ohne eigenen Wert: Ø aller Kurse)' : '') +
+    '. Wer mitten im Quartal kommt, zählt anteilig. Neu/gekündigt = Personen, deren Vertrag im Quartal beginnt bzw. endet.</p>';
+  var maxU = Math.max.apply(null, qs.map(function (q) { return q.soll; }).concat([1]));
+  h += '<div class="abschnitt-titel">Umsatz je Quartal</div>' + qs.slice().reverse().map(function (q) {
+    return balken(q.q, q.soll, maxU, euro(q.soll), [teile(q, function (k) { return euro(k.umsatz); }), 'bezahlt ' + euro(q.bezahlt), q.offen ? 'offen ' + euro(q.offen) : ''].filter(Boolean).join(' · '), q.laufend,
+      q.q + ': berechnet ' + euro(q.soll) + ', bezahlt ' + euro(q.bezahlt) + ', offen ' + euro(q.offen));
+  }).join('') + '<p class="zahl-hinweis">Berechnet = Soll der Forderung ohne stornierte Zeilen. Gestreift = laufendes Quartal.</p>';
+  var mitS = qs;
+  var maxL = Math.max.apply(null, mitS.map(function (q) { return q.leads; }).concat([1]));
+  h += '<div class="abschnitt-titel">Interessenten je Quartal</div>' + mitS.slice().reverse().map(function (q) {
+    return balken(q.q, q.leads, maxL, q.leads, 'davon Kunde geworden: ' + q.leadsKunde + (q.leads ? ' (' + Math.round(100 * q.leadsKunde / q.leads) + ' %)' : ''), q.laufend);
+  }).join('');
+  return h;
+}
+
+// ---------- Infos: Ladezeit, Läufe, Befehle ----------
+function infosHtml() {
+  var l = D.ladezeit, s = function (ms) { return (ms / 1000).toFixed(1).replace('.', ',') + ' s'; };
+  var h = '<div class="vorgang ruhig" style="margin-top:16px"><span class="typ">Ladezeit</span><span class="sub">Letztes Laden ' + s(l.dauer) + ', davon Daten ' + s(l.ms) + ' aus ' +
+    (l.quelle === 'Cache' ? 'dem Zwischenspeicher' : 'den Sheets') + '. Der Server merkt sich die Sheets ' + l.cacheMinuten + ' Minuten; „Stand“ oben antippen lädt neu aus den Sheets.</span></div>';
+  h += tauchen('Läufe', D.laeufe.length, laeufeHtml(), false);
+  h += tauchen('Befehle', D.befehle.length, befehleHtml(), false);
+  return h;
+}
 function laeufeHtml() {
-  var h = '<p class="gruss">Alle automatischen Abläufe. Ein Lauf-Protokoll (letzter Lauf, Ergebnis) folgt in einer späteren Stufe.</p>';
+  var h = '<p class="gruss" style="margin-top:0">Alle automatischen Abläufe. Ein Lauf-Protokoll (letzter Lauf, Ergebnis) folgt in einer späteren Stufe.</p>';
   ['Zeitgesteuert', 'Bei Änderung', 'Bei Eingang'].forEach(function (g) {
     h += '<div class="abschnitt-titel">' + g + '</div>' + D.laeufe.filter(function (l) { return l.gruppe === g; }).map(function (l) {
       return '<div class="zeile"><span class="was">' + esc(l.lauf) + '</span><span class="wann">' + esc(l.takt) + '</span><span class="ergebnis"><span class="code">' + esc(l.projekt) + '</span></span></div>';
@@ -531,7 +599,7 @@ function laeufeHtml() {
   return h;
 }
 function befehleHtml() {
-  return '<p class="gruss">Jeder Knopf schickt einen Befehl <b>AKTION:Schlüssel</b>. Das Ziel-Script findet die Zeile über den Schlüssel – das Cockpit selbst schreibt nichts.</p>' +
+  return '<p class="gruss" style="margin-top:0">Jeder Knopf schickt einen Befehl <b>AKTION:Schlüssel</b>. Das Ziel-Script findet die Zeile über den Schlüssel – das Cockpit selbst schreibt nichts.</p>' +
     D.befehle.map(function (b) {
       return '<div class="befehl-zeile"><span><b>' + esc(b.id) + '</b> · ' + esc(b.label) + (b.ziel === 'GEPLANT' ? ' <span class="pill neutral">geplant</span>' : '') + '</span>' +
         '<span class="sub">Schlüssel: ' + esc(b.schluessel) + ' → ' + esc(b.zeile) + '</span><span class="code">' + esc(b.wo) + '</span></div>';
@@ -557,6 +625,7 @@ document.addEventListener('click', function (e) {
   var t = e.target.closest('button');
   if (!t || t.disabled) return;
   if (t.dataset.ich) { ich = t.dataset.ich; try { localStorage.setItem('cockpit-ich', ich); } catch (x) {} return rendere(); }
+  if (t.id === 'stand') { if (D) neuLaden(null, true); return; }
   if (t.id === 'wer-knopf') { ich = ich === 'Christina' ? 'Thanh' : 'Christina'; try { localStorage.setItem('cockpit-ich', ich); } catch (x) {} return rendere(); }
   if (t.dataset.ansicht) { Z.ansicht = t.dataset.ansicht; Z.detail = null; Z.von = null; Z.frage = null; Z.warnungen = null; window.scrollTo(0, 0); return rendere(); }
   if (t.dataset.filter) { Z.filter = t.dataset.filter; return rendere(); }
@@ -586,6 +655,11 @@ function oeffneVorgang(id) {
   return rendere();
 }
 
+// Zurück in die App nach mehr als 5 Minuten → neu laden (vom Server-Cache, also schnell)
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible' && D && Date.now() - GELADEN > 5 * 60000 && !Z.frage) neuLaden();
+});
+
 rendere();
 neuLaden(function () {
   if (!START) return;
@@ -602,7 +676,7 @@ neuLaden(function () {
       ladeAkte(a.akte.art, a.akte.key);
     });
   }
-});
+}, !!START);   // Direktlink aus Telegram: frisch aus den Sheets
 </script>
 
 </body>
