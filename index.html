@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFFCFC">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Bachata Cockpit</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&family=Mulish:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+/* Stil aus dem Prototyp (01-Konzept/261026-cockpit-prototyp.html) – Layout: Handy-Spalte (max. 460 px) auf warmem Weiß wie bachata-viersen.de, dunkles Dock wie die Website-Navigation,
+   „Texte“ darf am Desktop breiter werden. Bewusst ein helles Erscheinungsbild (Website-Look), keine Dunkel-Variante. */
+:root {
+  --bg: #FFFCFC;          /* Website-Grund */
+  --paper: #FFFFFF;       /* Karten */
+  --sand: #F7F2ED;        /* ruhige Flächen */
+  --line: #E8E1DA;
+  --ink: #333232;         /* Website-Text und Navigation */
+  --muted: #6E6A68;
+  --stone: #958E89;
+  --accent: #D17B05;      /* Website-Orange */
+  --accent-text: #A35F00; /* Orange als Text auf Hell */
+  --accent-soft: #FFF4E5;
+  --accent-line: #F1D3A6;
+  --ok: #1E7B4F;   --ok-bg: #E7F4EC;
+  --warn: #8F5600; --warn-bg: #FFF1D4;
+  --err: #B3261E;  --err-bg: #FCE9E7;
+  --neutral: #6E6A68; --neutral-bg: #F1EDE9;
+  --tg: #2AABEE; --tg-chat: #E9F0F4; --tg-bubble: #FFFFFF; --tg-line: #D5E1E8; --tg-text: #1F2933; --tg-sub: #6B7C89;
+  --f-head: "Jost", "Futura", "Century Gothic", sans-serif;
+  --f-body: "Mulish", "Avenir", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --r: 10px;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font-family: var(--f-body); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { max-width: 460px; margin: 0 auto; min-height: 100vh; padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+.app.breit { max-width: 1080px; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+.kopf { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: rgba(255,252,252,.96); backdrop-filter: blur(8px); padding-block: 14px 12px; border-bottom: 1px solid var(--line); }
+.kopf-zeile { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.ober { font-family: var(--f-head); font-weight: 400; font-size: .7rem; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+.marke { font-family: var(--f-head); font-weight: 300; text-transform: uppercase; letter-spacing: .06em; font-size: 2.3rem; line-height: 1; margin: 2px 0 0; color: var(--accent); }
+.prototyp { display: inline-block; margin-left: 8px; font-family: var(--f-mono); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 4px; padding: 0 5px; vertical-align: 2px; white-space: nowrap; }
+.wer { white-space: nowrap; flex: none; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px 4px 4px; background: var(--paper); font-size: .92rem; }
+.wer .punkt { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .8rem; }
+
+.gruss { margin: 16px 0 0; color: var(--muted); }
+.gruss b { color: var(--ink); font-weight: 600; }
+.werfrage { margin-top: 14px; background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; }
+.werfrage p { margin: 0; font-size: .93rem; }
+
+.segment { display: grid; grid-template-columns: 1fr 1fr; background: var(--sand); border-radius: 10px; padding: 3px; margin-top: 14px; }
+.segment button { border: 0; background: transparent; padding: 9px; color: var(--muted); font-weight: 600; border-radius: 8px; }
+.segment button[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 3px rgba(51,50,50,.12); }
+.filter { display: flex; gap: 8px; overflow-x: auto; padding-block: 12px 2px; scrollbar-width: none; }
+.filter::-webkit-scrollbar { display: none; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 6px 13px; font-size: .86rem; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.chip .n { font-family: var(--f-mono); font-size: .72rem; margin-left: 4px; opacity: .7; }
+
+.liste { display: grid; gap: 10px; padding-block: 12px 8px; }
+.karte { text-align: left; width: 100%; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 4px; box-shadow: 0 1px 2px rgba(51,50,50,.05); }
+.karte:active { background: var(--sand); }
+.karte-kopf, .zeile-kopf { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.typ { font-family: var(--f-head); font-weight: 500; font-size: .72rem; text-transform: uppercase; letter-spacing: .14em; color: var(--accent-text); }
+.alter { font-size: .78rem; color: var(--stone); white-space: nowrap; }
+.karte h3 { margin: 0; font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
+.sub { color: var(--muted); font-size: .9rem; }
+.karte-fuss { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+.schluessel { font-family: var(--f-mono); font-size: .76rem; color: var(--muted); }
+.betrag { font-variant-numeric: tabular-nums; font-weight: 600; margin-left: auto; }
+.pill { display: inline-flex; align-items: center; font-size: .76rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { color: var(--ok); background: var(--ok-bg); } .pill.warn { color: var(--warn); background: var(--warn-bg); }
+.pill.err { color: var(--err); background: var(--err-bg); } .pill.neutral { color: var(--neutral); background: var(--neutral-bg); }
+.pill.akz { color: var(--accent-text); background: var(--accent-soft); }
+.code { font-family: var(--f-mono); font-size: .68rem; color: var(--stone); }
+.leer { text-align: center; color: var(--muted); padding: 40px 16px; }
+.leer .gross { font-family: var(--f-head); font-weight: 300; font-size: 2.4rem; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin-bottom: 4px; }
+
+.wahl { margin-top: 14px; display: grid; gap: 6px; }
+.wahl label { font-family: var(--f-head); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.wahl select { width: 100%; background-color: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 40px 12px 14px; font-size: 1rem; font-weight: 600; appearance: none; box-shadow: 0 1px 2px rgba(51,50,50,.05);
+  background-image: linear-gradient(45deg, transparent 50%, var(--accent) 50%), linear-gradient(135deg, var(--accent) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 52%, calc(100% - 14px) 52%; background-size: 6px 6px; background-repeat: no-repeat; }
+.zurueck { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 12px 0 0; color: var(--accent-text); font-weight: 600; font-size: .92rem; }
+.akte-kopf { margin-top: 18px; display: grid; gap: 6px; }
+.d-titel { font-family: var(--f-head); font-weight: 400; font-size: 1.85rem; line-height: 1.1; margin: 0; text-wrap: balance; }
+.akte-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.kpi { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; min-width: 0; }
+.kpi .k { font-family: var(--f-head); font-size: .66rem; text-transform: uppercase; letter-spacing: .14em; color: var(--stone); }
+.kpi .v { font-weight: 700; margin-top: 2px; overflow-wrap: anywhere; line-height: 1.3; }
+.kpi .v small { display: block; font-weight: 400; color: var(--muted); font-size: .8rem; margin-top: 1px; }
+.kpi.fehlt { border-color: var(--err); background: var(--err-bg); } .kpi.fehlt .v { color: var(--err); }
+.kpi.zahl .v { font-family: var(--f-head); font-weight: 400; font-size: 1.6rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi.zahl.offen .v { color: var(--accent-text); }
+.kpi.breit { grid-column: 1 / -1; }
+.profile { margin-top: 10px; font-size: .88rem; color: var(--muted); background: var(--sand); border-radius: var(--r); padding: 10px 12px; }
+.profile button { background: none; border: 0; padding: 0; color: var(--accent-text); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
+.vorgang { margin-top: 14px; border: 1px solid var(--accent-line); border-radius: 12px; background: var(--accent-soft); padding: 14px; display: grid; gap: 10px; }
+.vorgang.ruhig { border-color: var(--line); background: var(--sand); }
+.vorgang h3 { margin: 0; font-size: 1.12rem; line-height: 1.3; }
+.vorgang p { margin: 0; color: var(--muted); font-size: .93rem; }
+.mailtext { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .95rem; line-height: 1.5; margin-top: 6px; max-height: 50vh; overflow-y: auto; }
+.innen { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; }
+.tg-zeile { display: flex; gap: 8px; align-items: flex-start; font-size: .8rem; color: var(--tg-sub); background: var(--tg-chat); border-radius: 8px; padding: 8px 10px; }
+.tg-logo { flex: none; width: 16px; height: 16px; border-radius: 50%; background: var(--tg); display: inline-grid; place-items: center; color: #fff; font-size: .55rem; font-weight: 800; margin-top: 2px; }
+.schnell { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pos { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.pos td { padding: 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.pos td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 12px; }
+.pos tr.summe td { border-bottom: 0; font-weight: 700; padding-top: 8px; }
+.teil-name { font-family: var(--f-head); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); }
+.befund { display: flex; gap: 10px; align-items: flex-start; font-size: .92rem; padding: 8px 10px; border-radius: 8px; }
+.befund.warn { background: var(--warn-bg); color: var(--warn); } .befund.err { background: var(--err-bg); color: var(--err); } .befund.ok { background: var(--ok-bg); color: var(--ok); }
+.befund .zeichen { flex: none; font-weight: 800; }
+
+.btn { border-radius: 8px; padding: 13px 16px; font-weight: 700; font-size: .98rem; border: 1px solid var(--ink); background: var(--paper); text-align: center; color: var(--ink); }
+.btn.primaer { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.gefahr { color: var(--err); border-color: var(--err); }
+.btn.klein { padding: 7px 12px; font-size: .86rem; font-weight: 600; border-radius: 999px; border-color: var(--line); justify-self: start; }
+.btn[disabled]:not(.laedt) { opacity: .45; cursor: not-allowed; }
+.btn.laedt { position: relative; color: transparent; }
+.btn.laedt::after { content: attr(data-laedt); position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 600; }
+.btn.laedt:not(.primaer)::after { color: var(--ink); }
+.knoepfe { display: grid; gap: 8px; }
+.zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hinweis-fehler { color: var(--err); font-size: .88rem; margin: 0; font-weight: 600; }
+.bestaetigen { background: var(--paper); border: 1px solid var(--warn); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.bestaetigen p { margin: 0; font-size: .92rem; }
+
+details.tauchen { margin-top: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); }
+details.tauchen > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; align-items: center; gap: 10px; font-weight: 700; }
+details.tauchen > summary::-webkit-details-marker { display: none; }
+details.tauchen > summary::after { content: "+"; color: var(--accent); font-size: 1.3rem; font-weight: 300; margin-left: auto; line-height: 1; }
+details.tauchen[open] > summary::after { content: "–"; }
+details.tauchen > summary .zahl { font-weight: 400; font-size: .8rem; color: var(--stone); }
+.tauch-inhalt { padding: 0 14px 12px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: .92rem; margin: 0; }
+.kv dt { color: var(--stone); } .kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.reihe { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: .92rem; }
+.reihe:first-child { border-top: 0; }
+.r-sub { color: var(--stone); font-size: .8rem; }
+.r-rechts { text-align: right; font-variant-numeric: tabular-nums; }
+.r-rechts .pill { margin-top: 4px; }
+.verlauf { list-style: none; margin: 0; padding: 0; }
+.verlauf li { display: grid; grid-template-columns: 62px 14px 1fr; gap: 8px; padding: 6px 0; font-size: .92rem; }
+.verlauf .wann { font-size: .78rem; color: var(--stone); padding-top: 2px; font-variant-numeric: tabular-nums; }
+.verlauf .knoten { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent); margin-top: 6px; background: var(--paper); }
+.verlauf li.jetzt .knoten { background: var(--accent); }
+.verlauf li.jetzt .was { color: var(--accent-text); font-weight: 600; }
+.verlauf .was small { display: block; color: var(--stone); font-size: .8rem; font-weight: 400; }
+
+.person { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.innen .person:nth-child(2) { border-top: 0; }
+.person .name { min-width: 0; }
+.person .name button { background: none; border: 0; padding: 0; text-align: left; font-weight: 700; color: var(--ink); }
+.person .name small { display: block; color: var(--stone); font-size: .76rem; }
+.umschalter { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; background: var(--paper); }
+.umschalter button { border: 0; background: transparent; padding: 7px 11px; font-size: .86rem; color: var(--muted); }
+.umschalter button + button { border-left: 1px solid var(--line); }
+.umschalter button[aria-pressed="true"].da { background: var(--ok); color: #fff; font-weight: 700; }
+.umschalter button[aria-pressed="true"].weg { background: var(--err); color: #fff; font-weight: 700; }
+.mailtext { font-size: .95rem; white-space: pre-line; }
+.briefing-karte { margin-top: 14px; width: 100%; text-align: left; display: grid; gap: 3px; border: 1px solid var(--accent); border-radius: 12px; padding: 14px; background: var(--paper); box-shadow: 0 4px 14px rgba(209,123,5,.12); }
+.briefing-karte .b-titel { font-family: var(--f-head); font-weight: 400; font-size: 1.2rem; line-height: 1.25; }
+.person-karte { margin-top: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; box-shadow: 0 1px 2px rgba(51,50,50,.05); }
+.person-karte.fertig { background: var(--sand); }
+.p-name { background: none; border: 0; padding: 0; text-align: left; font-weight: 700; font-size: 1.08rem; color: var(--ink); }
+.p-fakten { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .88rem; color: var(--muted); align-items: center; }
+.p-notiz { font-size: .9rem; background: var(--accent-soft); border-radius: 8px; padding: 8px 10px; }
+.p-ergebnis { font-size: .92rem; color: var(--ok); font-weight: 600; }
+.papier { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 16px; font-size: .74rem; line-height: 1.4; box-shadow: 0 6px 18px rgba(51,50,50,.10); }
+.papier .p-kopf { display: flex; justify-content: space-between; border-bottom: 2px solid var(--accent); padding-bottom: 8px; margin-bottom: 8px; gap: 8px; }
+.papier .p-marke { font-family: var(--f-head); font-weight: 300; font-size: 1.1rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.papier table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.papier td { padding: 4px 0; border-bottom: 1px solid var(--line); }
+.papier td:last-child { text-align: right; }
+
+.zeile { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.zeile .was { font-weight: 700; }
+.zeile .ergebnis { color: var(--muted); font-size: .88rem; grid-column: 1 / -1; }
+.zeile .wann { font-size: .78rem; color: var(--stone); text-align: right; }
+.punkt-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.abschnitt-titel { font-family: var(--f-head); font-weight: 400; font-size: .78rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 22px 0 2px; }
+.lauf-tg { margin-top: 6px; grid-column: 1 / -1; }
+
+.regeln { margin-top: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.regeln h3 { margin: 0 0 8px; font-size: 1rem; }
+.regeln ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .9rem; display: grid; gap: 4px; }
+.regeln b { color: var(--ink); }
+.paar { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 10px; }
+.paar-kopf { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.paar-kopf h3 { margin: 0; font-family: var(--f-head); font-weight: 400; font-size: 1.2rem; }
+.paar-spalten { display: grid; gap: 12px; }
+@media (min-width: 760px) { .paar-spalten { grid-template-columns: 1fr 1fr 1fr; } }
+.seite { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.seite-titel { display: flex; align-items: center; gap: 6px; font-family: var(--f-head); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.seite-titel .pill { margin-left: auto; letter-spacing: 0; text-transform: none; font-family: var(--f-body); }
+.chat { background: var(--tg-chat); border-radius: 12px; padding: 10px; display: grid; gap: 8px; }
+.blase { background: var(--tg-bubble); border: 1px solid var(--tg-line); border-radius: 12px 12px 12px 4px; padding: 9px 11px; color: var(--tg-text); font-size: .88rem; white-space: pre-line; overflow-wrap: anywhere; }
+.blase .tg-knoepfe { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.blase .tg-knoepfe span { flex: 1 1 auto; text-align: center; border-radius: 8px; background: #EAF5FD; color: #1D7DC4; font-size: .8rem; padding: 5px 8px; font-weight: 600; }
+.blase.danach { border-style: dashed; color: var(--tg-sub); }
+.blase mark { background: var(--err-bg); color: var(--err); border-radius: 3px; padding: 0 2px; }
+.app-seite { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: .9rem; display: grid; gap: 6px; }
+.app-seite .ort { font-family: var(--f-mono); font-size: .72rem; color: var(--stone); }
+.app-seite .titel { font-weight: 700; }
+.knoepfe-mini { display: flex; flex-wrap: wrap; gap: 6px; }
+.knoepfe-mini span { border: 1px solid var(--ink); border-radius: 6px; padding: 2px 8px; font-size: .8rem; }
+.knoepfe-mini span.p { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--paper); border-top: 1px solid var(--line); box-shadow: 0 -2px 12px rgba(51,50,50,.06); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.dock-in { max-width: 540px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
+.dock button { background: none; border: 0; border-top: 3px solid transparent; padding: 8px 2px 12px; display: grid; justify-items: center; gap: 1px; color: var(--muted); font-size: .66rem; }
+.dock button .z { font-family: var(--f-head); font-weight: 400; font-size: .98rem; letter-spacing: .06em; text-transform: uppercase; display: flex; align-items: center; gap: 4px; color: var(--ink); }
+.dock button[aria-current="page"] { border-top-color: var(--accent); color: var(--accent-text); }
+.dock button[aria-current="page"] .z { color: var(--accent-text); }
+.badge { font-size: .62rem; background: var(--accent); color: #fff; border-radius: 999px; padding: 0 5px; font-weight: 700; letter-spacing: 0; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); width: min(420px, calc(100% - 32px)); z-index: 8;
+  background: var(--paper); border: 1px solid var(--tg-line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 14px 40px rgba(51,50,50,.22); display: grid; gap: 6px; }
+.toast .tg-kopf { display: flex; align-items: center; gap: 8px; font-size: .78rem; color: var(--tg-sub); }
+.toast .tg-text { color: var(--tg-text); font-size: .93rem; white-space: pre-line; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ansicht { animation: rein .2s ease-out; }
+  .toast { animation: hoch .25s ease-out; }
+  @keyframes rein { from { transform: translateY(6px); opacity: .6; } to { transform: none; opacity: 1; } }
+  @keyframes hoch { from { transform: translate(-50%, 12px); opacity: .5; } to { transform: translate(-50%, 0); opacity: 1; } }
+}
+
+/* Ergänzungen MVP */
+.laden { color: var(--muted); padding: 30px 0; text-align: center; }
+.fehlerbox { margin-top: 14px; background: var(--err-bg); color: var(--err); border-radius: var(--r); padding: 12px 14px; font-size: .92rem; }
+.befehl-zeile { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; font-size: .9rem; }
+.befehl-zeile b { font-family: var(--f-mono); font-size: .8rem; }
+.pdf-rahmen { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+</style>
+
+<style>
+.anmeldung { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.anmeldung[hidden] { display: none; }
+.anmeldung-karte { max-width: 340px; text-align: center; }
+.anmeldung-karte h1 { font-family: var(--f-head); font-weight: 400; font-size: 32px; margin: 0 0 4px; }
+.anmeldung-karte p { color: var(--muted); margin: 0 0 20px; }
+#anmeldung-knopf { display: flex; justify-content: center; min-height: 44px; }
+</style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="kopf wrap">
+      <div class="kopf-zeile">
+        <div>
+          <div class="ober">Tanzschule Bachata Viersen<span class="prototyp" id="stand">lädt …</span></div>
+          <h1 class="marke">Cockpit</h1>
+        </div>
+        <button class="wer" id="wer-knopf" type="button" aria-label="Wer nutzt dieses Handy? Wechseln">
+          <span class="punkt" id="wer-kuerzel">?</span><span id="wer-name">Wer bist du?</span>
+        </button>
+      </div>
+    </header>
+    <main id="inhalt" class="wrap"><p class="laden">Daten werden geladen …</p></main>
+  </div>
+
+  <nav class="dock" aria-label="Bereiche">
+    <div class="dock-in">
+      <button type="button" data-ansicht="heute"><span class="z">Heute<span class="badge" id="badge-heute">·</span></span>Entscheiden</button>
+      <button type="button" data-ansicht="kunden"><span class="z">Kunden</span>Bestand</button>
+      <button type="button" data-ansicht="leads"><span class="z">Leads</span>Interessenten</button>
+      <button type="button" data-ansicht="laeufe"><span class="z">Läufe</span>Automatik</button>
+      <button type="button" data-ansicht="befehle"><span class="z">Befehle</span>Wer macht was</button>
+    </div>
+  </nav>
+  <div class="anmeldung" id="anmeldung" hidden>
+    <div class="anmeldung-karte">
+      <div class="ober">Tanzschule Bachata Viersen</div>
+      <h1>Cockpit</h1>
+      <p id="anmeldung-text"></p>
+      <div id="anmeldung-knopf"></div>
+    </div>
+  </div>
+  <div id="toast-ort" aria-live="polite"></div>
+  <script>
+function _startVorgang(v) {
+  v = String(v || '');
+  return /^(BRIEFING|(R|I|M|GA|G)-[A-Za-z0-9-]{1,40})$/.test(v) ? v : '';
+}
+window.COCKPIT_START = _startVorgang(new URLSearchParams(location.search).get('v'));
+window.COCKPIT_KONFIG = {"api":"","clientId":""};
+</script>
+  <script src="anmeldung.js?cefff14311"></script>
+  <script>
+// ============================================================
+// App.html – Oberfläche des Cockpits. Kennt keine Fachlogik:
+// zeigt an, was ladeStart/ladeKunde/ladeLead liefern, und schickt Befehle (AKTION + Schlüssel) an befehl().
+// Welche Knöpfe ein Vorgang hat, steht im Vorgang (befehle: [...]); Beschriftung/Stil aus der Befehlstabelle.
+// ============================================================
+var D = null, BEF = {}, AKTEN = { kunde: null, lead: null }, MAILS = {}, ERLEDIGT = {};   // je Ansicht eine eigene Akte
+var START = window.COCKPIT_START || '';   // Direktlink ?v=… (gesetzt von werkzeuge/web.js bzw. Vorschau)
+var Z = { ansicht: 'heute', filter: 'ALLE', kunde: '', lead: '', detail: null, von: null, frage: null, warnungen: null, pdf: false };
+var ich = null;
+try { ich = localStorage.getItem('cockpit-ich'); } catch (e) {}
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function $(s) { return document.querySelector(s); }
+
+// ---------- Server ----------
+function rufe(fn, args, fertig) {
+  var fehler = function (e) { $('#inhalt').insertAdjacentHTML('afterbegin', '<div class="fehlerbox">' + esc(e && e.message || e) + '</div>'); };
+  if (window.google && google.script && google.script.run) {
+    var r = google.script.run.withSuccessHandler(function (s) { fertig(JSON.parse(s)); }).withFailureHandler(fehler);
+    r[fn].apply(r, args);
+  } else if (window.COCKPIT_API) {
+    window.COCKPIT_API(fn, args, fertig, fehler);   // Cockpit-App (anmeldung.js)
+  } else if (window.VORSCHAU) {
+    setTimeout(function () { try { fertig(JSON.parse(window.VORSCHAU[fn].apply(null, args))); } catch (e) { fehler(e); } }, 250);
+  } else fehler('Kein Server erreichbar.');
+}
+function neuLaden(danach) {
+  rufe('ladeStart', [], function (d) {
+    D = d; BEF = {}; d.befehle.forEach(function (b) { BEF[b.id] = b; });
+    $('#stand').textContent = 'Stand ' + d.stand;
+    if (Z.ansicht === 'kunden' && Z.kunde) return ladeAkte('kunde', Z.kunde, danach);
+    if (Z.ansicht === 'leads' && Z.lead) return ladeAkte('lead', Z.lead, danach);
+    rendere(); if (danach) danach();
+  });
+}
+function ladeAkte(art, key, danach) {
+  AKTEN[art] = null; rendere();
+  rufe(art === 'kunde' ? 'ladeKunde' : 'ladeLead', [key], function (a) { AKTEN[art] = a; rendere(); if (danach) danach(); });
+}
+
+// ---------- Rahmen ----------
+function rendere() {
+  $('#wer-kuerzel').textContent = ich ? ich.charAt(0) : '?';
+  $('#wer-name').textContent = ich || 'Wer bist du?';
+  if (!D) return;
+  $('#badge-heute').textContent = D.vorgaenge.length;
+  document.querySelectorAll('.dock button').forEach(function (b) {
+    if (b.dataset.ansicht === Z.ansicht && !Z.detail) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  var h = Z.detail ? detailHtml() : { heute: heuteHtml, kunden: kundeHtml, leads: leadHtml, laeufe: laeufeHtml, befehle: befehleHtml }[Z.ansicht]();
+  $('#inhalt').innerHTML = '<div class="ansicht">' + h + '</div>';
+}
+function toast(text, kopf) {
+  $('#toast-ort').innerHTML = '<div class="toast" role="status"><div class="tg-kopf"><span class="tg-logo" style="margin:0">✓</span>' + esc(kopf || 'Erledigt') + '</div><div class="tg-text">' + esc(text) + '</div></div>';
+  clearTimeout(toast.t); toast.t = setTimeout(function () { $('#toast-ort').innerHTML = ''; }, 5000);
+}
+function kpi(k, v, klein, klasse) { return '<div class="kpi ' + (klasse || '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + (klein ? '<small>' + esc(klein) + '</small>' : '') + '</div></div>'; }
+function tauchen(titel, zahl, inhalt, offen) {
+  return '<details class="tauchen"' + (offen ? ' open' : '') + '><summary>' + esc(titel) + (zahl !== '' ? '<span class="zahl">' + zahl + '</span>' : '') + '</summary><div class="tauch-inhalt">' + inhalt + '</div></details>';
+}
+function verlaufHtml(l) {
+  if (!l.length) return '<p class="sub" style="margin:0">Noch nichts.</p>';
+  return '<ul class="verlauf">' + l.map(function (z, i) {
+    return '<li class="' + (i === 0 ? 'jetzt' : '') + '"><span class="wann">' + esc(z[0]) + '</span><span class="knoten"></span><span class="was">' + esc(z[1]) + (z[2] ? '<small>' + esc(z[2]) + '</small>' : '') + '</span></li>';
+  }).join('') + '</ul>';
+}
+
+// ---------- Knöpfe aus der Befehlstabelle ----------
+function knoepfe(ids, key, gesperrt) {
+  if (Z.frage && Z.frage.key === key) {
+    var b = BEF[Z.frage.id];
+    return '<div class="bestaetigen"><p><b>' + esc(b.frage) + '</b></p><div class="zwei"><button class="btn" type="button" data-abbruch>Abbrechen</button>' +
+      '<button class="btn ' + (b.stil === 'gefahr' ? 'gefahr' : 'primaer') + '" type="button" data-befehl="' + b.id + '" data-key="' + esc(key) + '" data-sicher="1" data-laedt="läuft …">' + esc(b.label) + '</button></div></div>';
+  }
+  if (Z.warnungen && Z.warnungen.key === key) {
+    return '<div class="bestaetigen"><p><b>Warnungen gelesen?</b></p><ul style="margin:0;padding-left:18px">' + Z.warnungen.liste.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul>' +
+      '<p>Nach der Freigabe bekommt die Rechnung ihre Nummer. Korrektur geht dann nur noch per Storno.</p>' +
+      '<div class="zwei"><button class="btn" type="button" data-abbruch>Abbrechen</button><button class="btn primaer" type="button" data-befehl="' + Z.warnungen.id + '" data-key="' + esc(key) + '" data-sicher="1" data-bestaetigt="1" data-laedt="wird freigegeben …">Trotzdem freigeben</button></div></div>';
+  }
+  var erste = ids[0], rest = ids.slice(1);
+  var knopf = function (id) {
+    var b = BEF[id];
+    return '<button class="btn ' + (b.stil === 'primaer' ? 'primaer' : b.stil === 'gefahr' ? 'gefahr' : '') + '" type="button" data-befehl="' + id + '" data-key="' + esc(key) + '" data-laedt="läuft …"' +
+      ((gesperrt && id === erste) || b.ziel === 'GEPLANT' ? ' disabled' : '') + '>' + esc(b.label) + '</button>';
+  };
+  return '<div class="knoepfe">' + knopf(erste) + (rest.length ? '<div class="zwei">' + rest.map(knopf).join('') + '</div>' : '') + '</div>';
+}
+
+// ---------- Heute ----------
+var TYPNAME = { RECHNUNG: 'Rechnung', PROBESTUNDE: 'Probestunde', INTERESSENT: 'Interessent', MAIL: 'Mail-Eingang', GUTSCHEIN: 'Gutschein' };
+function heuteHtml() {
+  var std = new Date().getHours(), gruss = std < 11 ? 'Guten Morgen' : std < 18 ? 'Hallo' : 'Guten Abend';
+  var h = '<p class="gruss">' + gruss + (ich ? ', <b>' + esc(ich) + '</b>' : '') + '. ' + (D.vorgaenge.length ? D.vorgaenge.length + ' Vorgänge warten auf eine Entscheidung.' : 'Alles entschieden.') + '</p>';
+  if (!ich) h += '<div class="werfrage"><p>Wer nutzt dieses Handy? Der Name geht mit jedem Befehl mit und steht in der Telegram-Bestätigung.</p><div class="zwei"><button class="btn" type="button" data-ich="Christina">Christina</button><button class="btn" type="button" data-ich="Thanh">Thanh</button></div></div>';
+  var b = D.briefing;
+  if (b.anzahl) {
+    h += '<button type="button" class="briefing-karte" data-briefing><span class="typ">Briefing · ' + esc(b.wochentag) + ' ' + esc(b.tag) + '</span>' +
+      '<span class="b-titel">' + b.anzahl + ' Probestündler · ' + b.slots.map(function (s) { return s.von + ' ' + s.kurs + ' (' + s.personen.length + ')'; }).join(' · ') + '</span>' +
+      '<span class="sub">' + (b.offen ? b.offen + ' Rückmeldungen offen' : 'alle zurückgemeldet') + (b.uebung ? ' · Übungszeit ' + esc(b.uebung) : '') + '</span></button>';
+  }
+  var n = { ALLE: D.vorgaenge.length };
+  D.vorgaenge.forEach(function (v) { n[v.typ] = (n[v.typ] || 0) + 1; });
+  h += '<div class="filter" role="group" aria-label="Filter">' + ['ALLE'].concat(Object.keys(TYPNAME)).filter(function (t) { return n[t]; }).map(function (t) {
+    return '<button type="button" class="chip" data-filter="' + t + '" aria-pressed="' + (Z.filter === t) + '">' + (t === 'ALLE' ? 'Alle' : TYPNAME[t]) + '<span class="n">' + n[t] + '</span></button>';
+  }).join('') + '</div>';
+  var liste = D.vorgaenge.filter(function (v) { return Z.filter === 'ALLE' || v.typ === Z.filter; });
+  if (!liste.length) return h + '<div class="leer"><div class="gross">Fertig</div>Nichts offen. Neue Vorgänge meldet Telegram.</div>';
+  return h + '<div class="liste">' + liste.map(function (v) {
+    var wer = v.typ === 'RECHNUNG' ? v.kunde : v.name, schl = v.typ === 'RECHNUNG' ? v.key + ' · ' + v.quartal : v.key + (v.slot ? ' · ' + v.slot : v.kanal ? ' · ' + v.kanal : '');
+    var pill = v.typ === 'RECHNUNG' ? (v.befunde.some(function (x) { return x.art === 'err'; }) ? ['err', 'Fehler'] : v.befunde.length ? ['warn', 'Befunde'] : ['akz', 'prüfen']) :
+               v.typ === 'PROBESTUNDE' ? ['warn', 'Rückmeldung'] : v.typ === 'MAIL' ? ['neutral', 'Zuordnen'] : ['warn', 'offen'];
+    return '<button type="button" class="karte" data-oeffne="' + esc(v.id) + '"><div class="karte-kopf"><span class="typ">' + (v.storno ? 'Storno + neue Rechnung' : TYPNAME[v.typ]) + '</span></div>' +
+      '<h3>' + esc(v.titel) + '</h3><div class="sub">' + esc(wer) + '</div><div class="karte-fuss"><span class="schluessel">' + esc(schl) + '</span>' +
+      (v.wert ? '<span class="betrag">' + esc(v.wert) + '</span>' : '') + '<span class="pill ' + pill[0] + '"' + (v.wert ? '' : ' style="margin-left:auto"') + '>' + pill[1] + '</span></div></button>';
+  }).join('') + '</div>';
+}
+
+// ---------- Briefing ----------
+function briefingHtml() {
+  var b = D.briefing;
+  var h = '<button type="button" class="zurueck" data-zurueck>← Heute</button><div class="akte-kopf"><span class="typ">Briefing</span><h2 class="d-titel">' + esc(b.wochentag) + ', ' + esc(b.tag) + '</h2>' +
+    '<span class="sub">Wer zur Probestunde kommt – mit allem, was du vor dem Gespräch wissen willst.</span></div>';
+  if (!b.anzahl) return h + '<div class="leer"><div class="gross">Frei</div>Keine Probestunden an diesem Tag.</div>';
+  h += b.slots.map(function (s) {
+    return '<div class="abschnitt-titel">' + esc(s.kurs) + ' · ' + esc(s.von) + (s.bis ? '–' + esc(s.bis) : '') + ' Uhr</div>' + s.personen.map(function (p) {
+      return '<section class="person-karte' + (p.offen ? '' : ' fertig') + '"><div class="zeile-kopf"><button type="button" class="p-name" data-lead="' + esc(p.nr) + '">' + esc(p.name) + ' ›</button>' +
+        '<span class="pill ' + (p.offen ? 'warn' : 'ok') + '">' + (p.offen ? 'offen' : esc(p.status)) + '</span></div>' +
+        '<div class="p-fakten"><span>' + (p.paar ? '👫 Paaranmeldung' : '👤 Einzelanmeldung') + '</span><span>📢 ' + esc(p.kanal) + '</span><span>✉️ seit ' + esc(p.erstkontakt) + '</span><span class="code">' + esc(p.nr) + '</span></div>' +
+        (p.notiz || p.interesse ? '<div class="p-notiz">' + esc([p.interesse ? 'Interesse: ' + p.interesse : '', p.notiz].filter(Boolean).join(' · ')) + '</div>' : '') +
+        (p.offen ? knoepfe(['PROBESTUNDE_ERSCHIENEN', 'PROBESTUNDE_VERPASST', 'ABBRECHEN'], p.nr) : '') + '</section>';
+    }).join('');
+  }).join('');
+  if (b.uebung) h += '<div class="vorgang ruhig" style="margin-top:18px"><span class="typ">💃 Kommende Übungszeit</span><b>' + esc(b.uebung) + '</b></div>';
+  return h;
+}
+
+// ---------- Kundenakte ----------
+function kundeHtml() {
+  var akt = D.kunden.filter(function (k) { return k.aktiv; }), inakt = D.kunden.filter(function (k) { return !k.aktiv; });
+  var opt = function (k) { return '<option value="' + esc(k.schluessel) + '"' + (k.schluessel === Z.kunde ? ' selected' : '') + '>' + esc(k.schluessel) + ' · ' + esc(k.nr) + (k.offen ? '  ● offen' : '') + '</option>'; };
+  var h = (Z.von ? '<button type="button" class="zurueck" data-zurueck>← Heute</button>' : '') +
+    '<div class="wahl"><label for="kunde-wahl">Kunde wählen</label><select id="kunde-wahl"><option value="">– bitte wählen –</option>' +
+    '<optgroup label="Aktiv (' + akt.length + ')">' + akt.map(opt).join('') + '</optgroup><optgroup label="Beendet (' + inakt.length + ')">' + inakt.map(opt).join('') + '</optgroup></select></div>';
+  if (!Z.kunde) return h;
+  if (!AKTEN.kunde) return h + '<p class="laden">Akte wird geladen …</p>';
+  var k = AKTEN.kunde;
+  h += '<div class="akte-kopf"><h2 class="d-titel">' + esc(k.name) + '</h2><div class="akte-meta"><span class="schluessel">Kundennr. ' + esc(k.nr) + ' · Mandatsref. ' + esc(k.nr) + (k.paar ? ' · Paar' : '') + '</span>' +
+    '<span class="pill ' + (k.aktiv ? 'ok' : 'neutral') + '">' + (k.aktiv ? 'Aktiv' : 'Beendet') + '</span></div></div>';
+  var mandat = k.mandat === null ? kpi('Lastschrift unterschrieben am', '—', 'zahlt per ' + k.zahlweise) : k.mandat ? kpi('Lastschrift unterschrieben am', k.mandat) : kpi('Lastschrift unterschrieben am', 'fehlt', 'Einzug nicht möglich', 'fehlt');
+  h += '<div class="kpis">' + kpi('Kurs', k.kurs, k.vertrag) + kpi('Tarif', k.tarif, k.personen + (k.personen > 1 ? ' Personen' : ' Person')) + kpi('Zahlweise', k.zahlweise) + mandat +
+    kpi('Partner/in', k.partner) + kpi('Kunde seit', k.seit, k.dauer) + kpi('Ausstehend', k.offen, '', 'zahl ' + k.offenArt) + kpi('Umsatz beglichen', k.umsatz, '', 'zahl') + '</div>';
+  if (k.profile.length) h += '<div class="profile">Gleiche Kundennummer, weiteres Profil: ' + k.profile.map(function (p) { return '<button type="button" data-kunde="' + esc(p.schluessel) + '">' + esc(p.schluessel) + '</button> (' + (p.aktiv ? 'aktiv' : 'beendet') + ')'; }).join(', ') + '</div>';
+  h += k.vorgang ? rechnungVorgangHtml(k.vorgang) : '<div class="vorgang ruhig"><span class="typ">Kein offener Vorgang</span><span class="sub">Pausieren, Kündigen, Paar ↔ einzeln und Storno laufen vorerst weiter über das Sheet-Menü.</span></div>';
+  h += tauchen('Stammdaten', '', '<dl class="kv">' + k.stamm.map(function (s) { return '<dt>' + esc(s[0]) + '</dt><dd>' + esc(s[1] || '—') + '</dd>'; }).join('') + '</dl>');
+  h += tauchen('Verträge', k.vertraege.length, k.vertraege.map(function (r) { return '<div class="reihe"><span>' + esc(r[0]) + '<div class="r-sub">' + esc(r[1]) + '</div></span><span class="sub">' + esc(r[2]) + '</span></div>'; }).join(''));
+  h += tauchen('Rechnungen', k.rechnungen.length, k.rechnungen.map(function (r) { return '<div class="reihe"><span>Nr. ' + esc(r[0]) + '<div class="r-sub">' + esc(r[1]) + '</div></span><span class="r-rechts">' + esc(r[2]) + '<br><span class="pill ' + r[4] + '">' + esc(r[3]) + '</span></span></div>'; }).join('') || '<p class="sub" style="margin:0">Keine.</p>');
+  h += tauchen('Forderungen', k.forderungen.length, k.forderungen.map(function (r) { return '<div class="reihe"><span>' + esc(r[0]) + '<div class="r-sub">' + esc(r[2]) + '</div></span><span class="r-rechts">' + esc(r[1]) + '</span></div>'; }).join('') || '<p class="sub" style="margin:0">Keine.</p>');
+  h += tauchen('Verlauf', k.verlauf.length, verlaufHtml(k.verlauf), true);
+  return h;
+}
+function rechnungVorgangHtml(v) {
+  var fehler = v.befunde.some(function (b) { return b.art === 'err'; });
+  var h = '<section class="vorgang"><div class="zeile-kopf"><span class="typ">Offener Vorgang · <span class="code" style="text-transform:none;letter-spacing:0">' + esc(v.key) + '</span></span><span class="alter">' + esc(v.quartal) + '</span></div><h3>' + esc(v.titel) + '</h3>';
+  h += v.befunde.map(function (b) { return '<div class="befund ' + b.art + '"><span class="zeichen">' + ({ warn: '!', err: '×', ok: '✓' }[b.art] || '·') + '</span><span>' + esc(b.text) + '</span></div>'; }).join('');
+  h += v.teile.map(function (t) {
+    return '<div class="innen"><span class="teil-name">' + esc(t.name) + '</span><span class="sub">' + esc([t.tarif, t.zahlweise, t.personen ? t.personen + ' Pers.' : '', t.grund ? 'Grund: ' + t.grund : ''].filter(Boolean).join(' · ')) + '</span>' +
+      (t.gesamt ? '<b>' + esc(t.gesamt) + '</b>' : '') + '</div>';
+  }).join('');
+  if (v.pdf) h += '<button type="button" class="btn klein" data-pdf>' + (Z.pdf ? 'Prüf-PDF schließen' : 'Prüf-PDF ansehen') + '</button>' + (Z.pdf ? '<iframe class="pdf-rahmen" src="https://drive.google.com/file/d/' + esc(v.pdf) + '/preview" title="Prüf-PDF"></iframe>' : '');
+  if (fehler) h += '<p class="hinweis-fehler">Freigabe gesperrt, solange ein Fehler offen ist.</p>';
+  return h + knoepfe(v.befehle, v.key, fehler) + '</section>';
+}
+
+// ---------- Interessentenakte ----------
+function leadHtml() {
+  var akt = D.leads.filter(function (l) { return l.aktiv; }), inakt = D.leads.filter(function (l) { return !l.aktiv; });
+  var opt = function (l) { return '<option value="' + esc(l.nr) + '"' + (l.nr === Z.lead ? ' selected' : '') + '>' + esc(l.name) + ' · ' + esc(l.nr) + (l.offen ? '  ● offen' : '') + '</option>'; };
+  var h = (Z.von ? '<button type="button" class="zurueck" data-zurueck>← ' + (Z.von === 'briefing' ? 'Briefing' : 'Heute') + '</button>' : '') +
+    '<div class="wahl"><label for="lead-wahl">Interessent wählen</label><select id="lead-wahl"><option value="">– bitte wählen –</option>' +
+    '<optgroup label="Offen (' + akt.length + ')">' + akt.map(opt).join('') + '</optgroup><optgroup label="Abgeschlossen (' + inakt.length + ')">' + inakt.map(opt).join('') + '</optgroup></select></div>';
+  if (!Z.lead) return h;
+  if (!AKTEN.lead) return h + '<p class="laden">Akte wird geladen …</p>';
+  var l = AKTEN.lead;
+  h += '<div class="akte-kopf"><h2 class="d-titel">' + esc(l.name) + '</h2><div class="akte-meta"><span class="schluessel">' + esc(l.nr) + ' · ' + esc(l.kanal) + '</span><span class="pill akz">' + esc(l.statusText) + '</span><span class="code">' + esc(l.status) + '</span></div></div>';
+  h += '<div class="kpis">' + kpi('Erstkontakt', l.erstkontakt, l.seitTagen) + kpi('Probestunde', l.probestunde) + kpi('Wiedervorlage', l.wiedervorlage) + kpi('Notiz', l.notiz || '—') + '</div>';
+  if (l.kunde) h += '<div class="profile">Jetzt Kunde: <button type="button" data-kunde="' + esc(l.kunde) + '">Kundennr. ' + esc(l.kundeNr) + ' öffnen</button></div>';
+  if (l.vorgang) h += '<section class="vorgang"><span class="typ">Offener Vorgang</span><h3>' + esc(l.vorgang.titel) + '</h3>' + knoepfe(l.vorgang.befehle, l.nr) + '</section>';
+  else h += '<div class="vorgang ruhig"><span class="typ">Kein offener Vorgang</span></div>';
+  h += tauchen('Historie', l.verlauf.length, verlaufHtml(l.verlauf), true);
+  h += tauchen('Kontakt', '', '<dl class="kv">' + l.kontakt.map(function (s) { return '<dt>' + esc(s[0]) + '</dt><dd>' + esc(s[1]) + '</dd>'; }).join('') + '</dl>');
+  return h;
+}
+
+// ---------- Vorgang ohne Akte (Mail, Gutschein) ----------
+function detailHtml() {
+  if (Z.detail === 'BRIEFING') return briefingHtml();
+  var v = D.vorgaenge.filter(function (x) { return x.id === Z.detail; })[0];
+  var h = '<button type="button" class="zurueck" data-zurueck>← Heute</button>';
+  if (!v) return h + '<div class="leer"><div class="gross">Erledigt</div>Dieser Vorgang ist nicht mehr offen' +
+    (ERLEDIGT[Z.detail] ? ' – Stand: ' + esc(ERLEDIGT[Z.detail]) + '. Der Telegram-Hinweis ist abgeschlossen.' : '.') + '</div>';
+  h += '<div class="akte-kopf"><span class="typ">' + TYPNAME[v.typ] + '</span><h2 class="d-titel">' + esc(v.titel) + '</h2></div><section class="vorgang">';
+  if (v.typ === 'MAIL') {
+    var m = MAILS[v.key];
+    h += '<div class="schluessel">' + esc(v.name) + ' · ' + esc(v.email) + '</div><div class="innen"><b>' + esc(v.betreff) + '</b>' +
+      (!m ? '<span class="sub">Mailtext wird geladen …</span>' :
+       !m.ok ? '<span class="sub">' + esc(m.text) + '</span>' :
+       '<span class="sub">' + esc(m.von) + (m.datum ? ' · ' + esc(m.datum) : '') + '</span><div class="mailtext">' + esc(m.text) + '</div>') + '</div>';
+  }
+  if (v.typ === 'GUTSCHEIN') h += '<div class="schluessel">' + esc(v.key) + ' · ' + esc(v.name) + (v.wert ? ' · ' + esc(v.wert) : '') + '</div>';
+  return h + knoepfe(v.befehle, v.key) + '</section>';
+}
+
+// ---------- Läufe, Befehle ----------
+function laeufeHtml() {
+  var h = '<p class="gruss">Alle automatischen Abläufe. Ein Lauf-Protokoll (letzter Lauf, Ergebnis) folgt in einer späteren Stufe.</p>';
+  ['Zeitgesteuert', 'Bei Änderung', 'Bei Eingang'].forEach(function (g) {
+    h += '<div class="abschnitt-titel">' + g + '</div>' + D.laeufe.filter(function (l) { return l.gruppe === g; }).map(function (l) {
+      return '<div class="zeile"><span class="was">' + esc(l.lauf) + '</span><span class="wann">' + esc(l.takt) + '</span><span class="ergebnis"><span class="code">' + esc(l.projekt) + '</span></span></div>';
+    }).join('');
+  });
+  return h;
+}
+function befehleHtml() {
+  return '<p class="gruss">Jeder Knopf schickt einen Befehl <b>AKTION:Schlüssel</b>. Das Ziel-Script findet die Zeile über den Schlüssel – das Cockpit selbst schreibt nichts.</p>' +
+    D.befehle.map(function (b) {
+      return '<div class="befehl-zeile"><span><b>' + esc(b.id) + '</b> · ' + esc(b.label) + (b.ziel === 'GEPLANT' ? ' <span class="pill neutral">geplant</span>' : '') + '</span>' +
+        '<span class="sub">Schlüssel: ' + esc(b.schluessel) + ' → ' + esc(b.zeile) + '</span><span class="code">' + esc(b.wo) + '</span></div>';
+    }).join('');
+}
+
+// ---------- Ereignisse ----------
+function ausfuehren(t) {
+  var id = t.dataset.befehl, key = t.dataset.key, b = BEF[id];
+  if (b.frage && !t.dataset.sicher) { Z.frage = { id: id, key: key }; return rendere(); }
+  var bereich = t.closest('section') || document;
+  bereich.querySelectorAll('.btn').forEach(function (x) { x.disabled = true; });
+  t.classList.add('laedt');
+  rufe('befehl', [id, key, { von: ich || '', bestaetigt: t.dataset.bestaetigt === '1' }], function (r) {
+    Z.frage = null; Z.warnungen = null;
+    if (r.rueckfrage) { Z.warnungen = { id: id, key: key, liste: r.warnungen }; return rendere(); }
+    if (!r.ok) { rendere(); return toast(r.text, 'Nicht ausgeführt'); }
+    toast(key + ' · ' + r.text + (ich ? ' · ' + ich : ''), r.bereits ? 'Schon erledigt' : 'Erledigt');
+    neuLaden();
+  });
+}
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('button');
+  if (!t || t.disabled) return;
+  if (t.dataset.ich) { ich = t.dataset.ich; try { localStorage.setItem('cockpit-ich', ich); } catch (x) {} return rendere(); }
+  if (t.id === 'wer-knopf') { ich = ich === 'Christina' ? 'Thanh' : 'Christina'; try { localStorage.setItem('cockpit-ich', ich); } catch (x) {} return rendere(); }
+  if (t.dataset.ansicht) { Z.ansicht = t.dataset.ansicht; Z.detail = null; Z.von = null; Z.frage = null; Z.warnungen = null; window.scrollTo(0, 0); return rendere(); }
+  if (t.dataset.filter) { Z.filter = t.dataset.filter; return rendere(); }
+  if (t.hasAttribute('data-briefing')) { Z.detail = 'BRIEFING'; window.scrollTo(0, 0); return rendere(); }
+  if (t.dataset.oeffne) return oeffneVorgang(t.dataset.oeffne);
+  if (t.dataset.kunde) { Z.ansicht = 'kunden'; Z.kunde = t.dataset.kunde; Z.detail = null; Z.von = null; return ladeAkte('kunde', t.dataset.kunde); }
+  if (t.dataset.lead) { Z.von = Z.detail === 'BRIEFING' ? 'briefing' : 'heute'; Z.detail = null; Z.ansicht = 'leads'; Z.lead = t.dataset.lead; window.scrollTo(0, 0); return ladeAkte('lead', t.dataset.lead); }
+  if (t.hasAttribute('data-zurueck')) { var zurBriefing = Z.von === 'briefing'; Z.ansicht = 'heute'; Z.detail = zurBriefing ? 'BRIEFING' : null; Z.von = null; Z.frage = null; window.scrollTo(0, 0); return rendere(); }
+  if (t.hasAttribute('data-abbruch')) { Z.frage = null; Z.warnungen = null; return rendere(); }
+  if (t.hasAttribute('data-pdf')) { Z.pdf = !Z.pdf; return rendere(); }
+  if (t.dataset.befehl) return ausfuehren(t);
+});
+document.addEventListener('change', function (e) {
+  if (e.target.id === 'kunde-wahl') { Z.kunde = e.target.value; Z.von = null; if (Z.kunde) ladeAkte('kunde', Z.kunde); else rendere(); }
+  if (e.target.id === 'lead-wahl') { Z.lead = e.target.value; Z.von = null; if (Z.lead) ladeAkte('lead', Z.lead); else rendere(); }
+});
+// Vorgang öffnen – aus der Liste oder per Direktlink ?v=<Vorgang-ID> aus Telegram.
+// Ist er nicht mehr offen, zeigt die Detailansicht „Erledigt“.
+function oeffneVorgang(id) {
+  Z.von = 'heute'; Z.pdf = false; window.scrollTo(0, 0);
+  if (id === 'BRIEFING') { Z.detail = 'BRIEFING'; return rendere(); }
+  var v = D.vorgaenge.filter(function (x) { return x.id === id; })[0];
+  if (v && v.typ === 'RECHNUNG') { Z.ansicht = 'kunden'; Z.kunde = v.kunde; Z.detail = null; return ladeAkte('kunde', v.kunde); }
+  if (v && (v.typ === 'PROBESTUNDE' || v.typ === 'INTERESSENT')) { Z.ansicht = 'leads'; Z.lead = v.key; Z.detail = null; return ladeAkte('lead', v.key); }
+  Z.ansicht = 'heute'; Z.detail = id;
+  if (v && v.typ === 'MAIL' && !MAILS[v.key]) rufe('ladeMail', [v.key], function (m) { MAILS[v.key] = m; if (Z.detail === v.id) rendere(); });
+  return rendere();
+}
+
+rendere();
+neuLaden(function () {
+  if (!START) return;
+  oeffneVorgang(START);
+  // Über den Telegram-Link gekommen, Vorgang aber nicht mehr offen → Hinweis in Telegram abschließen
+  if (START !== 'BRIEFING' && !D.vorgaenge.some(function (x) { return x.id === START; })) {
+    rufe('abschliessenWennErledigt', [START], function (a) {
+      if (a.offen || Z.detail !== START) return;
+      ERLEDIGT[START] = a.stand;
+      if (!a.akte) return rendere();
+      // Interessent / Rechnung: direkt die Akte – dort steht der aktuelle Stand
+      Z.detail = null; Z.von = null;
+      if (a.akte.art === 'lead') { Z.ansicht = 'leads'; Z.lead = a.akte.key; } else { Z.ansicht = 'kunden'; Z.kunde = a.akte.key; }
+      ladeAkte(a.akte.art, a.akte.key);
+    });
+  }
+});
+</script>
+
+</body>
+</html>

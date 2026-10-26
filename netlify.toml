@@ -1,0 +1,4 @@
+# Statische Seite ohne Build-Schritt – die Dateien erzeugt 02-MVP/werkzeuge/web.js im Haupt-Repo.
+[build]
+  publish = "."
+  command = ""
