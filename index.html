@@ -380,7 +380,28 @@ function rendere() {
   });
   var h = Z.detail ? detailHtml() : { heute: heuteHtml, kunden: kundeHtml, leads: leadHtml, zahlen: zahlenHtml, infos: infosHtml }[Z.ansicht]();
   $('#inhalt').innerHTML = '<div class="ansicht">' + h + '</div>';
+  merkeSchritt();
 }
+
+// ---------- Zurück-Taste ----------
+// Jede neue Ansicht (Reiter, Akte, Vorgang, Briefing, Unterreiter) wird ein Eintrag im Browserverlauf.
+// Die Zurück-Taste (Android, Browser) springt so durch die App statt aus ihr heraus.
+var SCHRITT = ['ansicht', 'detail', 'kunde', 'lead', 'zahlenTeil', 'von'];
+function merkeSchritt() {
+  var s = {}, alt = history.state;
+  SCHRITT.forEach(function (k) { s[k] = Z[k]; });
+  if (!alt || !alt.cockpit) return history.replaceState({ cockpit: s }, '');
+  if (JSON.stringify(alt.cockpit) !== JSON.stringify(s)) history.pushState({ cockpit: s }, '');
+}
+window.addEventListener('popstate', function (e) {
+  if (!e.state || !e.state.cockpit || !D) return;
+  SCHRITT.forEach(function (k) { Z[k] = e.state.cockpit[k]; });
+  Z.frage = null; Z.warnungen = null; Z.pdf = false;
+  window.scrollTo(0, 0);
+  if (!Z.detail && Z.ansicht === 'kunden' && Z.kunde) return ladeAkte('kunde', Z.kunde);
+  if (!Z.detail && Z.ansicht === 'leads' && Z.lead) return ladeAkte('lead', Z.lead);
+  rendere();
+});
 function toast(text, kopf) {
   $('#toast-ort').innerHTML = '<div class="toast" role="status"><div class="tg-kopf"><span class="tg-logo" style="margin:0">✓</span>' + esc(kopf || 'Erledigt') + '</div><div class="tg-text">' + esc(text) + '</div></div>';
   clearTimeout(toast.t); toast.t = setTimeout(function () { $('#toast-ort').innerHTML = ''; }, 5000);
