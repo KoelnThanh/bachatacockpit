@@ -266,6 +266,13 @@ details.tauchen > summary .zahl { font-weight: 400; font-size: .8rem; color: var
 .befehl-zeile { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; font-size: .9rem; }
 .befehl-zeile b { font-family: var(--f-mono); font-size: .8rem; }
 .pdf-rahmen { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+/* Zahlen → Menschen: Karte (Leaflet) */
+.karte { height: 340px; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--sand); z-index: 0; }
+.karte .leaflet-tooltip { font-family: var(--f-body); font-size: .8rem; }
+.legende { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: .8rem; color: var(--muted); }
+.legende span { display: inline-flex; align-items: center; gap: 6px; }
+.legende i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.legende i.kursort { background: var(--bg); border: 2.5px solid var(--ink); width: 12px; height: 12px; }
 </style>
 
 <style>
@@ -329,7 +336,7 @@ window.COCKPIT_KONFIG = {"api":"https://script.google.com/macros/s/AKfycbzGYwx23
 var D = null, BEF = {}, AKTEN = { kunde: null, lead: null }, MAILS = {}, ERLEDIGT = {};   // je Ansicht eine eigene Akte
 var GEMERKT = {}, GELADEN = 0;   // geladene Akten bis zum nächsten Neuladen; Zeitpunkt des letzten ladeStart
 var START = window.COCKPIT_START || '';   // Direktlink ?v=… (gesetzt von werkzeuge/web.js bzw. Vorschau)
-var Z = { ansicht: 'heute', filter: 'ALLE', zahlenTeil: 'ueberblick', kunde: '', lead: '', detail: null, von: null, frage: null, warnungen: null, pdf: false };
+var Z = { ansicht: 'heute', filter: 'ALLE', zahlenTeil: 'ueberblick', menschen: 'aktuell', kunde: '', lead: '', detail: null, von: null, frage: null, warnungen: null, pdf: false };
 var ich = null;
 try { ich = localStorage.getItem('cockpit-ich'); } catch (e) {}
 
@@ -353,6 +360,7 @@ function neuLaden(danach, frisch) {
   var t0 = Date.now();
   $('#stand').classList.add('laedt');
   rufe('ladeStart', [!!frisch], function (d) {
+    if (frisch) { KARTE.daten = null; KARTE.runden = 0; }
     D = d; BEF = {}; GEMERKT = {}; GELADEN = Date.now(); B_GRUPPEN = d.briefingGruppen || []; d.befehle.forEach(function (b) { BEF[b.id] = b; });
     d.ladezeit.dauer = Date.now() - t0;
     $('#stand').classList.remove('laedt');
@@ -379,14 +387,16 @@ function rendere() {
     if (b.dataset.ansicht === Z.ansicht && !Z.detail) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   var h = Z.detail ? detailHtml() : { heute: heuteHtml, kunden: kundeHtml, leads: leadHtml, zahlen: zahlenHtml, infos: infosHtml }[Z.ansicht]();
+  if (KARTE.map) { KARTE.map.remove(); KARTE.map = null; }
   $('#inhalt').innerHTML = '<div class="ansicht">' + h + '</div>';
+  if (!Z.detail && Z.ansicht === 'zahlen' && Z.zahlenTeil === 'menschen') zeigeKarte();
   merkeSchritt();
 }
 
 // ---------- Zurück-Taste ----------
 // Jede neue Ansicht (Reiter, Akte, Vorgang, Briefing, Unterreiter) wird ein Eintrag im Browserverlauf.
 // Die Zurück-Taste (Android, Browser) springt so durch die App statt aus ihr heraus.
-var SCHRITT = ['ansicht', 'detail', 'kunde', 'lead', 'zahlenTeil', 'von'];
+var SCHRITT = ['ansicht', 'detail', 'kunde', 'lead', 'zahlenTeil', 'menschen', 'von'];
 function merkeSchritt() {
   var s = {}, alt = history.state;
   SCHRITT.forEach(function (k) { s[k] = Z[k]; });
@@ -583,12 +593,12 @@ function balken(l, wert, max, text, sub, laufend, titel, breit) {
   return '<div class="balken' + (laufend ? ' laufend' : '') + (breit ? ' breit' : '') + '" title="' + esc(titel || '') + '"><span class="l">' + esc(l) + '</span><span class="spur"><i style="width:' +
     (max > 0 ? Math.max(0, Math.round(100 * wert / max)) : 0) + '%"></i></span><span class="v">' + esc(text) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</div>';
 }
-var ZAHLEN_TEILE = { ueberblick: 'Überblick', geld: 'Geld', kanaele: 'Kanäle' };
+var ZAHLEN_TEILE = { ueberblick: 'Überblick', menschen: 'Menschen', geld: 'Geld', kanaele: 'Kanäle' };
 function zahlenHtml() {
   var h = '<div class="filter" role="group" aria-label="Bereich">' + Object.keys(ZAHLEN_TEILE).map(function (t) {
     return '<button type="button" class="chip" data-zahlen="' + t + '" aria-pressed="' + (Z.zahlenTeil === t) + '">' + ZAHLEN_TEILE[t] + '</button>';
   }).join('') + '</div>';
-  return h + (Z.zahlenTeil === 'geld' ? geldHtml() : Z.zahlenTeil === 'kanaele' ? kanaeleHtml() : ueberblickHtml());
+  return h + (Z.zahlenTeil === 'geld' ? geldHtml() : Z.zahlenTeil === 'kanaele' ? kanaeleHtml() : Z.zahlenTeil === 'menschen' ? menschenHtml() : ueberblickHtml());
 }
 function ueberblickHtml() {
   var z = D.zahlen, j = z.jetzt, qs = z.quartale;
@@ -622,6 +632,93 @@ function ueberblickHtml() {
     return balken(q.q, q.leads, maxL, q.leads, 'davon Kunde geworden: ' + q.leadsKunde + (q.leads ? ' (' + Math.round(100 * q.leadsKunde / q.leads) + ' %)' : ''), q.laufend);
   }).join('');
   return h;
+}
+
+// ---------- Zahlen: Menschen (Verteilungen + Karte) ----------
+// Verteilungen kommen mit ladeStart (D.menschen), die Karte erst beim Öffnen (ladeKarte; Leaflet wird dann nachgeladen).
+var KARTE = { daten: null, laedt: false, runden: 0, map: null };
+var STAND_FARBE = { aktiv: '#D17B05', neu: '#1E7B4F', pausiert: '#958E89', beendet: '#6E6A68' };
+var STAND_NAME = { aktiv: 'aktiv', neu: 'startet bald', pausiert: 'pausiert', beendet: 'ehemalig' };
+function menschenHtml() {
+  if (!D.menschen) return '<p class="gruss">Noch keine Daten – Server ist älter als die App.</p>';
+  var alle = Z.menschen === 'alle', m = D.menschen[alle ? 'alle' : 'aktuell'], a = m.alter, k = KARTE.daten;
+  var h = '<div class="filter" role="group" aria-label="Wer">' + [['aktuell', 'Aktuelle Kunden'], ['alle', 'Alle inkl. ehemalige']].map(function (x) {
+    return '<button type="button" class="chip" data-menschen="' + x[0] + '" aria-pressed="' + ((Z.menschen || 'aktuell') === x[0]) + '">' + x[1] + '</button>';
+  }).join('') + '</div>';
+  var ent = k && k.entfernung[alle ? 'alle' : 'aktuell'];
+  var pos = {}; m.position.forEach(function (x) { pos[x[0]] = x[1]; });
+  var komma = function (n) { return String(n).replace('.', ','); };
+  h += '<div class="kpis">' + kpi('Personen', m.personen, m.kunden + ' Kunden · ' + m.paare + ' Paare', 'zahl') +
+    kpi('Alter', a.schnitt === null ? '—' : 'Ø ' + a.schnitt, a.median === null ? 'kein Geburtsdatum' : 'Median ' + komma(a.median) + ' · ' + a.juengste + '–' + a.aelteste + ' Jahre', 'zahl') +
+    kpi('Weg zum Kurs', ent && ent.schnitt !== null ? 'Ø ' + komma(ent.schnitt) + ' km' : '…', 'Luftlinie zum Kursort', 'zahl') +
+    kpi('Leader : Follower', (pos.Leader || 0) + ' : ' + (pos.Follower || 0), 'Einzelanmeldungen', 'zahl') + '</div>';
+  h += '<div class="abschnitt-titel">Wo wohnen sie?</div><div id="karte" class="karte" role="img" aria-label="Karte der Wohnorte"></div>';
+  h += '<div class="legende">' + ['aktiv', 'neu', 'pausiert'].concat(alle ? ['beendet'] : []).map(function (s) {
+    return '<span><i style="background:' + STAND_FARBE[s] + (s === 'beendet' ? ';opacity:.45' : '') + '"></i>' + STAND_NAME[s] + '</span>';
+  }).join('') + '<span><i class="kursort"></i>Kursort</span></div>';
+  h += '<p class="zahl-hinweis">' + (!k ? 'Karte wird geladen … (neue Anschriften sucht der Server einmalig, das dauert beim ersten Mal etwas)' :
+    'Ein Punkt je Anschrift (Paar = größerer Punkt), auf ~100 m gerundet, ohne Namen. Am Handy mit zwei Fingern verschieben und zoomen.' +
+    (k.offen ? ' ' + k.offen + ' Anschriften werden noch gesucht.' : '') + (k.ohne ? ' ' + k.ohne + ' ohne Anschrift oder nicht gefunden.' : '')) + '</p>';
+  var verteilung = function (titel, l, einheit, hinweis) {
+    if (!l.length) return '';
+    var max = Math.max.apply(null, l.map(function (x) { return x[1]; }).concat([1])), summe = l.reduce(function (s, x) { return s + x[1]; }, 0);
+    return '<div class="abschnitt-titel">' + titel + '</div>' + l.map(function (x) {
+      return balken(x[0], x[1], max, x[1], '', false, x[0] + ': ' + x[1] + ' ' + einheit + (summe ? ' (' + Math.round(100 * x[1] / summe) + ' %)' : ''), true);
+    }).join('') + (hinweis ? '<p class="zahl-hinweis">' + hinweis + '</p>' : '');
+  };
+  h += verteilung('Wohnort', m.orte, 'Personen', 'Nach Postleitzahl, gezählt in Personen (Paar = 2).');
+  if (ent) h += verteilung('Entfernung zum Kurs', ent.gruppen, 'Personen', 'Luftlinie von der Anschrift zum Kursort (Erich-Sanders-Weg 1).');
+  h += verteilung('Alter', a.gruppen, 'Kunden', 'Alter des Vertragspartners – vom Tanzpartner gibt es kein Geburtsdatum' + (a.ohne ? '; ' + a.ohne + ' ohne Geburtsdatum.' : '.'));
+  h += verteilung('Position', m.position, 'Kunden', 'Wunschposition aus der Anmeldung, nur Einzelanmeldungen – Paare bringen beide Rollen mit.');
+  h += verteilung('Dabei seit', m.dauer, 'Personen', 'Seit dem ersten Vertrag, nur aktuelle Kunden.');
+  return h;
+}
+function mitLeaflet(fertig) {
+  if (window.L) return fertig();
+  if (mitLeaflet.warte) return mitLeaflet.warte.push(fertig);
+  mitLeaflet.warte = [fertig];
+  var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'leaflet.css'; document.head.appendChild(css);
+  var js = document.createElement('script'); js.src = 'leaflet.js';
+  js.onload = function () { var w = mitLeaflet.warte; mitLeaflet.warte = null; w.forEach(function (f) { f(); }); };
+  js.onerror = function () { mitLeaflet.warte = null; var e = $('#karte'); if (e) e.textContent = 'Karte konnte nicht geladen werden.'; };
+  document.head.appendChild(js);
+}
+function zeigeKarte() {
+  if (!$('#karte')) return;
+  if (!KARTE.daten) {
+    if (KARTE.laedt) return;
+    KARTE.laedt = true;
+    return rufe('ladeKarte', [], function (k) {
+      KARTE.daten = k; KARTE.laedt = false;
+      if (Z.ansicht === 'zahlen' && Z.zahlenTeil === 'menschen' && !Z.detail) rendere();
+      // Neue Anschriften sucht der Server in Portionen – solange welche offen sind, noch zweimal nachfragen
+      if (k.offen && KARTE.runden++ < 2) setTimeout(function () { KARTE.daten = null; if ($('#karte')) zeigeKarte(); }, 500);
+    });
+  }
+  mitLeaflet(function () {
+    var el = $('#karte'), k = KARTE.daten, alle = Z.menschen === 'alle';
+    if (!el || !k) return;
+    if (KARTE.map) { KARTE.map.remove(); KARTE.map = null; }
+    var map = KARTE.map = L.map(el, { attributionControl: false, scrollWheelZoom: false, dragging: !L.Browser.mobile, tap: false, zoomSnap: 0.5 });
+    L.control.attribution({ prefix: false }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 17, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(map);
+    var grenzen = [];
+    // Ehemalige zuerst zeichnen, damit die aktuellen obenauf liegen
+    k.punkte.filter(function (p) { return alle || p.aktuellPersonen; })
+      .sort(function (x, y) { return (y.stand === 'beendet') - (x.stand === 'beendet'); })
+      .forEach(function (p) {
+        var pers = alle ? p.personen : p.aktuellPersonen, alt = p.stand === 'beendet';
+        L.circleMarker([p.lat, p.lng], { radius: 5 + 2.5 * Math.min(pers - 1, 3), color: '#fff', weight: 1.5, fillColor: STAND_FARBE[p.stand], fillOpacity: alt ? 0.45 : 0.9 })
+          .bindTooltip(STAND_NAME[p.stand] + ' · ' + pers + (pers === 1 ? ' Person' : ' Personen') + (p.ort ? ' · ' + esc(p.ort) : '') + (p.km !== null ? ' · ' + String(p.km).replace('.', ',') + ' km' : ''))
+          .addTo(map);
+        grenzen.push([p.lat, p.lng]);
+      });
+    if (k.kurs) {
+      L.circleMarker([k.kurs.lat, k.kurs.lng], { radius: 8, color: '#333232', weight: 3, fillColor: '#FFFCFC', fillOpacity: 1 }).bindTooltip('Kursort').addTo(map);
+      grenzen.push([k.kurs.lat, k.kurs.lng]);
+    }
+    if (grenzen.length > 1) map.fitBounds(grenzen, { padding: [24, 24], maxZoom: 14 }); else map.setView(grenzen[0] || [51.2846, 6.3772], 12);
+  });
 }
 
 // ---------- Infos: Ladezeit, Läufe, Befehle ----------
@@ -725,6 +822,7 @@ document.addEventListener('click', function (e) {
   if (t.id === 'wer-knopf') { ich = ich === 'Christina' ? 'Thanh' : 'Christina'; try { localStorage.setItem('cockpit-ich', ich); } catch (x) {} return rendere(); }
   if (t.dataset.ansicht) { Z.ansicht = t.dataset.ansicht; Z.detail = null; Z.von = null; Z.frage = null; Z.warnungen = null; window.scrollTo(0, 0); return rendere(); }
   if (t.dataset.filter) { Z.filter = t.dataset.filter; return rendere(); }
+  if (t.dataset.menschen) { Z.menschen = t.dataset.menschen; return rendere(); }
   if (t.dataset.zahlen) { Z.zahlenTeil = t.dataset.zahlen; return rendere(); }
   if (t.hasAttribute('data-briefing')) { Z.detail = 'BRIEFING'; window.scrollTo(0, 0); return rendere(); }
   if (t.dataset.oeffne) return oeffneVorgang(t.dataset.oeffne);
