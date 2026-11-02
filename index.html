@@ -159,6 +159,7 @@ details.tauchen > summary .zahl { font-weight: 400; font-size: .8rem; color: var
 .kv dt { color: var(--stone); } .kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
 .reihe { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: .92rem; }
 .reihe:first-child { border-top: 0; }
+.mahn-knopf { padding: 0 0 10px; }
 .r-sub { color: var(--stone); font-size: .8rem; }
 .r-rechts { text-align: right; font-variant-numeric: tabular-nums; }
 .r-rechts .pill { margin-top: 4px; }
@@ -761,7 +762,8 @@ function geldHtml() {
     return balken(m.titel, m.lastschrift + m.ueberweisung, max, euro(m.lastschrift + m.ueberweisung), 'Lastschrift ' + euro(m.lastschrift) + ' · Überweisung ' + euro(m.ueberweisung), false, '', true);
   }).join('') + '<p class="zahl-hinweis">Nach Fälligkeit der offenen Forderungen.</p>';
   if (g.ueberfaellig.length) h += tauchen('Überfällig je Kunde', g.ueberfaellig.length, g.ueberfaellig.map(function (u) {
-    return '<div class="reihe"><span><button type="button" class="p-name" data-kunde="' + esc(u.kunde) + '">' + esc(u.kunde) + ' ›</button><div class="r-sub">seit ' + u.tage + ' Tagen</div></span><span class="r-rechts">' + euro(u.betrag) + '</span></div>';
+    return '<div class="reihe"><span><button type="button" class="p-name" data-kunde="' + esc(u.kunde) + '">' + esc(u.kunde) + ' ›</button><div class="r-sub">seit ' + u.tage + ' Tagen · ' + esc(u.zahlweise || 'Zahlweise offen') + (u.gemahnt ? ' · gemahnt ' + esc(u.gemahnt) : '') + '</div></span><span class="r-rechts">' + euro(u.betrag) + '</span></div>' +
+      (u.mahnKey ? '<div class="mahn-knopf">' + knoepfe(['FORDERUNG_MAHNEN'], u.mahnKey) + '</div>' : '');
   }).join(''), g.ueberfaellig.length <= 5);
   var r = g.rueck;
   h += '<div class="abschnitt-titel">Rücklastschriften · 12 Monate</div><div class="kpis">' + kpi('Anzahl', r.anzahl, r.quote === null ? '' : r.quote.toString().replace('.', ',') + ' % der Einzüge') +
