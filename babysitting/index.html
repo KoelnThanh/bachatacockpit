@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Babysitting · Bachata Viersen</title>
+<style>
+  :root { --bg:#faf7f2; --karte:#fff; --text:#2a2420; --leise:#8a7f76; --akzent:#b5482f; --frei:#fff4e5; --frei-rand:#e8a33d; --linie:#ece5dc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1b1816; --karte:#26221f; --text:#f1ebe4; --leise:#9c9189; --akzent:#e07a5f; --frei:#3a2c17; --frei-rand:#e8a33d; --linie:#3a3430; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:22px; margin:0 0 2px; }
+  .sub { color:var(--leise); font-size:14px; margin-bottom:18px; }
+  .zeile { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:var(--karte); color:var(--text);
+           border:1px solid var(--linie); border-radius:12px; padding:12px 14px; margin-bottom:8px; font:inherit; cursor:pointer; }
+  .zeile .datum { min-width:84px; font-weight:600; }
+  .zeile .zeit { display:block; font-weight:400; font-size:12px; color:var(--leise); }
+  .zeile .wer { flex:1; }
+  .zeile.frei { background:var(--frei); border-color:var(--frei-rand); }
+  .zeile.frei .wer { color:var(--akzent); font-weight:600; }
+  .zeile.grau { opacity:.55; }
+  .zeile:disabled { cursor:default; }
+  .zeile.naechster { border-width:2px; border-color:var(--akzent); }
+  .marke { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--akzent); font-weight:700; display:block; }
+  .notiz { display:block; font-size:13px; color:var(--leise); }
+  #hinweis { padding:10px 12px; border-radius:10px; margin-bottom:12px; display:none; background:var(--frei); border:1px solid var(--frei-rand); }
+  .laden { color:var(--leise); padding:30px 0; text-align:center; }
+  /* Auswahl unten */
+  #schleier { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; justify-content:center; }
+  #blatt { background:var(--karte); width:100%; max-width:520px; border-radius:16px 16px 0 0; padding:18px 16px 24px; }
+  #blatt h2 { font-size:18px; margin:0 0 12px; }
+  select, input { width:100%; font:inherit; padding:12px; border-radius:10px; border:1px solid var(--linie); background:var(--bg); color:var(--text); margin-bottom:10px; }
+  .knoepfe { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
+  .knopf { flex:1; padding:12px; border-radius:10px; border:1px solid var(--linie); background:var(--bg); color:var(--text); font:inherit; cursor:pointer; }
+  .knopf.haupt { background:var(--akzent); border-color:var(--akzent); color:#fff; font-weight:600; }
+  .knopf:disabled { opacity:.5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Babysitting · Bachata Viersen</h1>
+  <div class="sub">Sonntags während des Kurses. Antippen zum Eintragen oder Ändern.</div>
+  <div id="hinweis"></div>
+  <div id="liste"><div class="laden">Lade Termine …</div></div>
+</main>
+
+<div id="schleier">
+  <div id="blatt">
+    <h2 id="b-titel"></h2>
+    <select id="b-wahl"></select>
+    <input id="b-frei" placeholder="Name" maxlength="40" style="display:none">
+    <input id="b-notiz" placeholder="Grund, z. B. Vertretung Vicky" maxlength="80" style="display:none">
+    <div class="knoepfe">
+      <button class="knopf haupt" id="b-ok">Eintragen</button>
+      <button class="knopf" id="b-leeren" style="display:none">Wieder frei</button>
+      <button class="knopf" id="b-weg">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Daten über die Apps-Script-Schnittstelle (AppscriptBabysitting, doPost) – Quelle dieser Datei: AppscriptBabysitting/web/index.html
+var API = 'https://script.google.com/macros/s/AKfycbyWZZQzXAGdI41Hd6sIqyD6g3PmnSDJLefy7GNpt4VszAFVTPJGL3scBZk4mFLvcRhY/exec';
+function api(fn, args) {
+  return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args || [] }) })
+    .then(function (r) { if (!r.ok) throw new Error('Server nicht erreichbar (' + r.status + ')'); return r.json(); })
+    .then(function (a) { if (!a.ok) throw new Error(a.fehler || 'Fehler'); return a.daten; });
+}
+var NICHT = 'nicht nötig', ANDERER = '__anderer__';
+var daten = null, aktiv = null;
+var $ = function (id) { return document.getElementById(id); };
+
+function tagText(key) {
+  return 'So ' + key.slice(8, 10) + '.' + key.slice(5, 7) + '.';
+}
+function merke(n) { try { localStorage.setItem('bs-name', n); } catch (e) {} }
+function gemerkt() { try { return localStorage.getItem('bs-name') || ''; } catch (e) { return ''; } }
+
+function hinweis(text) { var h = $('hinweis'); h.textContent = text || ''; h.style.display = text ? 'block' : 'none'; }
+
+function zeige(d) {
+  daten = d;
+  var l = $('liste'); l.innerHTML = '';
+  if (!d.zeilen.length) { l.innerHTML = '<div class="laden">Im Kurskalender stehen gerade keine Sonntage.</div>'; return; }
+  var naechster = true;
+  d.zeilen.forEach(function (z) {
+    var b = document.createElement('button');
+    var grau = z.art === 'kein_kurs' || z.art === 'nicht';
+    b.className = 'zeile' + (z.art === 'frei' ? ' frei' : '') + (grau ? ' grau' : '');
+    if (naechster && z.art !== 'kein_kurs') { b.className += ' naechster'; }
+    var links = document.createElement('span'); links.className = 'datum'; links.textContent = tagText(z.key);
+    if (z.von) { var zt = document.createElement('span'); zt.className = 'zeit'; zt.textContent = z.von + '–' + z.bis; links.appendChild(zt); }
+    var wer = document.createElement('span'); wer.className = 'wer';
+    if (naechster && z.art !== 'kein_kurs') { var m = document.createElement('span'); m.className = 'marke'; m.textContent = 'Nächster Sonntag'; wer.appendChild(m); naechster = false; }
+    var t = { frei: 'noch frei', belegt: z.babysitter, nicht: 'kein Babysitting nötig', kein_kurs: 'kein Kurs', ohne_kurs: z.babysitter + ' (kein Kurs im Kalender)' }[z.art];
+    wer.appendChild(document.createTextNode(t));
+    if (z.notiz) { var n = document.createElement('span'); n.className = 'notiz'; n.textContent = z.notiz; wer.appendChild(n); }
+    b.appendChild(links); b.appendChild(wer);
+    if (z.art === 'kein_kurs') b.disabled = true; else b.onclick = function () { oeffne(z); };
+    l.appendChild(b);
+  });
+}
+
+function oeffne(z) {
+  aktiv = z; hinweis('');
+  $('b-titel').textContent = tagText(z.key) + (z.von ? ' · ' + z.von + '–' + z.bis : '');
+  var w = $('b-wahl'); w.innerHTML = '';
+  var opt = function (wert, text) { var o = document.createElement('option'); o.value = wert; o.textContent = text; w.appendChild(o); };
+  opt('', 'Wer übernimmt?');
+  daten.namen.forEach(function (n) { opt(n, n); });
+  opt(ANDERER, 'anderer Name …');
+  opt(NICHT, 'nicht nötig (z. B. Vertretung)');
+  var start = z.babysitter || (z.art === 'frei' ? gemerkt() : '');
+  if (start && start !== NICHT && daten.namen.indexOf(start) < 0) { $('b-frei').value = start; start = ANDERER; } else { $('b-frei').value = ''; }
+  w.value = start; if (w.value !== start) w.value = '';
+  $('b-notiz').value = z.notiz || '';
+  $('b-leeren').style.display = z.babysitter ? '' : 'none';
+  felder();
+  $('schleier').style.display = 'flex';
+}
+function felder() {
+  var v = $('b-wahl').value;
+  $('b-frei').style.display = v === ANDERER ? '' : 'none';
+  $('b-notiz').style.display = v === NICHT ? '' : 'none';
+}
+function zu() { $('schleier').style.display = 'none'; aktiv = null; }
+
+function speichern(name) {
+  var z = aktiv, notiz = $('b-notiz').value;
+  if (name === null) {
+    var v = $('b-wahl').value;
+    name = v === ANDERER ? $('b-frei').value.trim() : v;
+    if (!name) { (v === ANDERER ? $('b-frei') : $('b-wahl')).focus(); return; }
+  }
+  if (name && name !== NICHT) merke(name);
+  ['b-ok', 'b-leeren'].forEach(function (id) { $(id).disabled = true; });
+  api('setzen', [z.key, name, notiz, z.babysitter])
+    .then(function (r) {
+      ['b-ok', 'b-leeren'].forEach(function (id) { $(id).disabled = false; });
+      zu(); zeige(r.daten);
+      if (!r.ok && r.konflikt) hinweis('Inzwischen hat sich jemand anderes eingetragen: ' + tagText(z.key) + ' – ' + (r.aktuell || 'wieder frei') + '. Bitte nochmal prüfen.');
+    })
+    .catch(function (e) {
+      ['b-ok', 'b-leeren'].forEach(function (id) { $(id).disabled = false; });
+      zu(); hinweis('Hat nicht geklappt: ' + e.message); laden();
+    });
+}
+
+function laden() {
+  api('laden').then(zeige)
+    .catch(function (e) { $('liste').innerHTML = ''; hinweis('Liste konnte nicht geladen werden: ' + e.message); });
+}
+
+$('b-wahl').onchange = felder;
+$('b-ok').onclick = function () { speichern(null); };
+$('b-leeren').onclick = function () { speichern(''); };
+$('b-weg').onclick = zu;
+$('schleier').onclick = function (e) { if (e.target === this) zu(); };
+laden();
+</script>
+</body>
+</html>

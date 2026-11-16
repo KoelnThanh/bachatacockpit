@@ -496,6 +496,7 @@ function briefingHtml() {
         (p.offen ? knoepfe(['PROBESTUNDE_ERSCHIENEN', 'PROBESTUNDE_VERPASST', 'ABBRECHEN'], p.nr) : '') + '</section>';
     }).join('');
   }).join('');
+  if (b.babysitter) h += '<div class="vorgang ruhig" style="margin-top:18px"><span class="typ">👶 Babysitting</span><b>' + esc(b.babysitter) + '</b></div>';
   if (b.uebung) h += '<div class="vorgang ruhig" style="margin-top:18px"><span class="typ">💃 Kommende Übungszeit</span><b>' + esc(b.uebung) + '</b></div>';
   return h;
 }
