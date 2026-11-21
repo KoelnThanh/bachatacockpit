@@ -338,8 +338,10 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function 
 function $(s) { return document.querySelector(s); }
 
 // ---------- Server ----------
-function rufe(fn, args, fertig) {
-  var fehler = function (e) { $('#inhalt').insertAdjacentHTML('afterbegin', '<div class="fehlerbox">' + esc(e && e.message || e) + '</div>'); };
+// still = Hintergrundabruf: Fehler nur ins Log, keine Fehlerbox
+function rufe(fn, args, fertig, still) {
+  var fehler = still ? function (e) { console.warn(fn + ': ' + (e && e.message || e)); }
+    : function (e) { $('#inhalt').insertAdjacentHTML('afterbegin', '<div class="fehlerbox">' + esc(e && e.message || e) + '</div>'); };
   if (window.google && google.script && google.script.run) {
     var r = google.script.run.withSuccessHandler(function (s) { fertig(JSON.parse(s)); }).withFailureHandler(fehler);
     r[fn].apply(r, args);
@@ -364,7 +366,14 @@ function standGemerkt() {
   return null;
 }
 function uebernimm(d) {
-  D = d; BEF = {}; GEMERKT = {}; B_GRUPPEN = d.briefingGruppen || []; d.befehle.forEach(function (b) { BEF[b.id] = b; });
+  D = d; BEF = {}; GEMERKT = {}; ALLE_AKTEN = null; B_GRUPPEN = d.briefingGruppen || []; d.befehle.forEach(function (b) { BEF[b.id] = b; });
+}
+// Alle Akten laufender Kunden und offener Interessenten, nach jedem frischen Start im Hintergrund geholt.
+// Nur im Arbeitsspeicher (nicht auf dem Gerät gespeichert) und nur, wenn der Stand zum angezeigten passt.
+var ALLE_AKTEN = null;
+function aktenVorladen() {
+  var fuer = D;
+  rufe('ladeAkten', [], function (a) { if (D === fuer && !ALT && a && a.stand === D.stand) ALLE_AKTEN = a; }, true);
 }
 // frisch = an den Sheets vorbei (sonst antwortet der Server aus seinem Cache, den der Vorwärmer aktuell hält)
 function neuLaden(danach, frisch) {
@@ -375,6 +384,7 @@ function neuLaden(danach, frisch) {
     d.ladezeit.dauer = Date.now() - t0;
     d.ladezeit.anmeldung = messung && messung.anmeldung || 0;
     standMerken(d);
+    aktenVorladen();
     $('#stand').classList.remove('laedt');
     $('#stand').textContent = 'Stand ' + d.stand + ' ↻';
     if (Z.ansicht === 'kunden' && Z.kunde) return ladeAkte('kunde', Z.kunde, danach);
@@ -383,7 +393,8 @@ function neuLaden(danach, frisch) {
   });
 }
 function ladeAkte(art, key, danach) {
-  var merk = art + '|' + key;
+  var merk = art + '|' + key, vor = ALLE_AKTEN && ALLE_AKTEN[art === 'kunde' ? 'kunden' : 'leads'][key];
+  if (!GEMERKT[merk] && vor) GEMERKT[merk] = vor;
   if (GEMERKT[merk]) { AKTEN[art] = GEMERKT[merk]; rendere(); if (danach) danach(); return; }
   AKTEN[art] = null; rendere();
   rufe(art === 'kunde' ? 'ladeKunde' : 'ladeLead', [key], function (a) { GEMERKT[merk] = a; AKTEN[art] = a; rendere(); if (danach) danach(); });
