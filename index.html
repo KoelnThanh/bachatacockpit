@@ -320,7 +320,7 @@ function _startVorgang(v) {
 window.COCKPIT_START = _startVorgang(new URLSearchParams(location.search).get('v'));
 window.COCKPIT_KONFIG = {"api":"https://script.google.com/macros/s/AKfycbzGYwx23qo6Ojc2Sn06jr9CP4sx_6rINKbMH_QDeHUNF0Y9iwLSEYmfRYWgO8fa08t_/exec","clientId":"1058637526626-qmu802ta3v3ma5pbi9mmoas1ad4tssbl.apps.googleusercontent.com"};
 </script>
-  <script src="anmeldung.js?cefff14311"></script>
+  <script src="anmeldung.js?81b766e92c"></script>
   <script>
 // ============================================================
 // App.html – Oberfläche des Cockpits. Kennt keine Fachlogik:
@@ -349,13 +349,32 @@ function rufe(fn, args, fertig) {
     setTimeout(function () { try { fertig(JSON.parse(window.VORSCHAU[fn].apply(null, args))); } catch (e) { fehler(e); } }, 250);
   } else fehler('Kein Server erreichbar.');
 }
-// frisch = an den Sheets vorbei (sonst darf der Server bis zu 10 Minuten aus seinem Cache antworten)
+// Letzter Stand auf dem Gerät: beim Öffnen sofort anzeigen, frisch kommt er im Hintergrund.
+// Solange nur der gespeicherte Stand zu sehen ist (ALT), sind Befehle gesperrt. Nach 7 Tagen wird er verworfen.
+var STAND_SPEICHER = 'cockpit-stand', STAND_TAGE = 7, ALT = false;
+function standMerken(d) {
+  try { localStorage.setItem(STAND_SPEICHER, JSON.stringify({ zeit: Date.now(), d: d })); } catch (e) { try { localStorage.removeItem(STAND_SPEICHER); } catch (x) {} }
+}
+function standGemerkt() {
+  try {
+    var g = JSON.parse(localStorage.getItem(STAND_SPEICHER));
+    if (g && g.d && g.d.befehle && Date.now() - g.zeit < STAND_TAGE * 864e5) return g.d;
+    localStorage.removeItem(STAND_SPEICHER);
+  } catch (e) {}
+  return null;
+}
+function uebernimm(d) {
+  D = d; BEF = {}; GEMERKT = {}; B_GRUPPEN = d.briefingGruppen || []; d.befehle.forEach(function (b) { BEF[b.id] = b; });
+}
+// frisch = an den Sheets vorbei (sonst antwortet der Server aus seinem Cache, den der Vorwärmer aktuell hält)
 function neuLaden(danach, frisch) {
   var t0 = Date.now();
   $('#stand').classList.add('laedt');
-  rufe('ladeStart', [!!frisch], function (d) {
-    D = d; BEF = {}; GEMERKT = {}; GELADEN = Date.now(); B_GRUPPEN = d.briefingGruppen || []; d.befehle.forEach(function (b) { BEF[b.id] = b; });
+  rufe('ladeStart', [!!frisch], function (d, messung) {
+    uebernimm(d); GELADEN = Date.now(); ALT = false;
     d.ladezeit.dauer = Date.now() - t0;
+    d.ladezeit.anmeldung = messung && messung.anmeldung || 0;
+    standMerken(d);
     $('#stand').classList.remove('laedt');
     $('#stand').textContent = 'Stand ' + d.stand + ' ↻';
     if (Z.ansicht === 'kunden' && Z.kunde) return ladeAkte('kunde', Z.kunde, danach);
@@ -651,8 +670,15 @@ function menschenHtml() {
 // ---------- Infos: Ladezeit, Läufe, Befehle ----------
 function infosHtml() {
   var l = D.ladezeit, s = function (ms) { return (ms / 1000).toFixed(1).replace('.', ',') + ' s'; };
-  var h = '<div class="vorgang ruhig" style="margin-top:16px"><span class="typ">Ladezeit</span><span class="sub">Letztes Laden ' + s(l.dauer) + ', davon Daten ' + s(l.ms) + ' aus ' +
-    (l.quelle === 'Cache' ? 'dem Zwischenspeicher' : 'den Sheets') + '. Der Server merkt sich die Sheets ' + l.cacheMinuten + ' Minuten; „Stand“ oben antippen lädt neu aus den Sheets.</span></div>';
+  var h = '<div class="vorgang ruhig" style="margin-top:16px"><span class="typ">Ladezeit</span><span class="sub">';
+  if (ALT || l.dauer == null) h += 'Gerade ist der auf diesem Gerät gespeicherte Stand zu sehen, der aktuelle lädt noch.';
+  else {
+    var server = l.server != null ? l.server : l.ms, netz = Math.max(0, l.dauer - (l.anmeldung || 0) - server);
+    h += 'Letztes Laden ' + s(l.dauer) + ': ' + (l.anmeldung ? 'Anmeldung ' + s(l.anmeldung) + ' · ' : '') + 'Server ' + s(server) +
+      (l.quelle === 'Fertig' ? ' (fertig vorbereitet)' : ' (davon Daten ' + s(l.ms) + ' aus ' + (l.quelle === 'Cache' ? 'dem Zwischenspeicher' : 'den Sheets') + ')') +
+      ' · Netz und Script-Start ' + s(netz) + '.';
+  }
+  h += ' Der Server liest die Sheets tagsüber alle ' + (l.vorwaermMinuten || 10) + ' Minuten vor; „Stand“ oben antippen lädt sofort neu aus den Sheets.</span></div>';
   var probleme = D.laeufe.filter(function (l) { return l.zustand === 'fehler' || l.zustand === 'ueberfaellig'; }).length;
   h += tauchen('Läufe' + (probleme ? ' · ' + probleme + ' mit Problem' : ''), D.laeufe.length, laeufeHtml(), true);
   h += tauchen('Befehle', D.befehle.length, befehleHtml(), false);
@@ -730,6 +756,7 @@ function befehleHtml() {
 // ---------- Ereignisse ----------
 function ausfuehren(t) {
   var id = t.dataset.befehl, key = t.dataset.key, b = BEF[id];
+  if (ALT) return toast('Der aktuelle Stand lädt noch – gleich noch einmal tippen.', 'Einen Moment');
   if (b.frage && !t.dataset.sicher) { Z.frage = { id: id, key: key }; return rendere(); }
   var bereich = t.closest('section') || document;
   bereich.querySelectorAll('.btn').forEach(function (x) { x.disabled = true; });
@@ -783,6 +810,8 @@ document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible' && D && Date.now() - GELADEN > 5 * 60000 && !Z.frage) neuLaden();
 });
 
+var gemerkt = standGemerkt();
+if (gemerkt) { uebernimm(gemerkt); ALT = true; $('#stand').textContent = 'Stand ' + gemerkt.stand + ' · lädt …'; }
 rendere();
 neuLaden(function () {
   if (!START) return;

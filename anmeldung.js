@@ -14,9 +14,13 @@
     var b = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
     return JSON.parse(decodeURIComponent(atob(b).split('').map(function (c) { return '%' + ('0' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')));
   }
-  try { var g = JSON.parse(localStorage.getItem(SPEICHER)); if (gueltig(g)) token = g; } catch (e) {}
+  // frueher = auf diesem Gerät schon einmal angemeldet: Neuanmeldung läuft meist still (auto_select), daher den
+  // Anmeldebildschirm erst nach STILL_MS zeigen – bis dahin bleibt der gespeicherte Stand des Cockpits sichtbar.
+  var frueher = false, STILL_MS = 4000, spaeter = null;
+  try { var g = JSON.parse(localStorage.getItem(SPEICHER)); frueher = !!g; if (gueltig(g)) token = g; } catch (e) {}
 
   function zeige(text) {
+    clearTimeout(spaeter);
     $('anmeldung').hidden = false;
     $('anmeldung-text').textContent = text || 'Bitte mit dem Google-Konto von Bachata Viersen anmelden.';
   }
@@ -30,12 +34,14 @@
       token = { jwt: antwort.credential, exp: p.exp, email: p.email };
       try { localStorage.setItem(SPEICHER, JSON.stringify(token)); } catch (e) {}
     } catch (e) { return zeige('Anmeldung fehlgeschlagen – bitte noch einmal.'); }
+    clearTimeout(spaeter);
     $('anmeldung').hidden = true;
     var w = warte; warte = [];
     w.forEach(function (f) { f(); });
   }
   function anmelden(text) {
-    zeige(text);
+    if (frueher && !text) { clearTimeout(spaeter); spaeter = setTimeout(function () { zeige(); }, STILL_MS); }
+    else zeige(text);
     if (gisBereit) google.accounts.id.prompt();
   }
   function mitToken(f) {
@@ -46,17 +52,21 @@
   }
 
   // Server-Aufruf; bei abgelaufener Anmeldung einmal neu anmelden und wiederholen
+  // fertig(daten, {anmeldung: ms}) – wie lange auf die Anmeldung gewartet wurde (für die Ladezeit in Infos)
   window.COCKPIT_API = function (fn, args, fertig, fehler, nochmal) {
     if (!K.api || !K.clientId) return fehler('Die App ist noch nicht fertig eingerichtet (API-Adresse oder Client-ID fehlt).');
+    var t0 = Date.now();
     mitToken(function () {
+      var anmeldung = Date.now() - t0;
       fetch(K.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args, idToken: token.jwt }) })
         .then(function (r) { if (!r.ok) throw new Error('Server nicht erreichbar (' + r.status + ').'); return r.json(); })
         .then(function (a) {
-          if (a.ok) return fertig(a.daten);
+          if (a.ok) return fertig(a.daten, { anmeldung: anmeldung });
           if (a.code === 'ANMELDUNG' && !nochmal) { vergiss(); return window.COCKPIT_API(fn, args, fertig, fehler, true); }
           if (a.code === 'KONTO') {
             // falsches Google-Konto: Konto wählen lassen, danach denselben Aufruf wiederholen
             vergiss();
+            try { localStorage.removeItem('cockpit-stand'); } catch (e) {}   // gespeicherter Stand des Cockpits (App.html)
             if (gisBereit) google.accounts.id.disableAutoSelect();
             warte.push(function () { window.COCKPIT_API(fn, args, fertig, fehler, true); });
             return anmelden(a.text + ' Bitte mit dem Bachata-Konto anmelden.');
